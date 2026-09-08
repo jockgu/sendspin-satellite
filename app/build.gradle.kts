@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "com.jockgu.sendspinsatellite"
+    namespace = "com.nanopixel.sendspinsatellite"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.jockgu.sendspinsatellite"
+        applicationId = "com.nanopixel.sendspinsatellite"
         minSdk = 24
         targetSdk = 37
         versionCode = 1
@@ -54,6 +54,8 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.okhttp)
+    implementation(libs.bouncycastle)
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)

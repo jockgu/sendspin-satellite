@@ -1,4 +1,4 @@
-package com.jockgu.sendspinsatellite
+package com.nanopixel.sendspinsatellite
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -12,6 +12,6 @@ class ApplicationIdentityTest {
     @Test
     fun applicationContextUsesTheExpectedPackageName() {
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.jockgu.sendspinsatellite", appContext.packageName)
+        assertEquals("com.nanopixel.sendspinsatellite", appContext.packageName)
     }
 }

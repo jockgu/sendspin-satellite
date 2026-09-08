@@ -1,4 +1,4 @@
-package com.jockgu.sendspinsatellite.ui
+package com.nanopixel.sendspinsatellite.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,14 +18,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.jockgu.sendspinsatellite.connection.ConnectionState
-import com.jockgu.sendspinsatellite.connection.ConnectionUiState
+import com.nanopixel.sendspinsatellite.connection.ConnectionState
+import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
 
 @Composable
 fun SendspinSatelliteApp(
     state: ConnectionUiState,
     onServerAddressChanged: (String) -> Unit,
-    onSaveServerAddress: () -> Unit,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
 ) {
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
@@ -44,6 +45,17 @@ fun SendspinSatelliteApp(
                 Text(state.connectionState.label, style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(8.dp))
                 Text(state.detail, style = MaterialTheme.typography.bodyMedium)
+                state.serverName?.let { serverName ->
+                    Spacer(Modifier.height(8.dp))
+                    Text("Server: $serverName", style = MaterialTheme.typography.bodyMedium)
+                }
+                if (state.clockSamples > 0) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Clock: ${state.clockSamples} samples · RTT ${formatMilliseconds(state.roundTripUs)} · offset ${formatMilliseconds(state.clockOffsetUs)}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 Spacer(Modifier.height(32.dp))
 
                 OutlinedTextField(
@@ -52,16 +64,16 @@ fun SendspinSatelliteApp(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     label = { Text("Sendspin server address") },
-                    placeholder = { Text("https://sendspin.example") },
+                    placeholder = { Text("ws://server.local:8927/sendspin") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
                 Spacer(Modifier.height(16.dp))
                 Button(
-                    onClick = onSaveServerAddress,
-                    enabled = state.serverAddress.isNotBlank(),
+                    onClick = if (state.connectionState == ConnectionState.DISCONNECTED || state.connectionState == ConnectionState.ERROR) onConnect else onDisconnect,
+                    enabled = state.serverAddress.isNotBlank() || state.connectionState != ConnectionState.DISCONNECTED,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Save server address")
+                    Text(if (state.connectionState == ConnectionState.DISCONNECTED || state.connectionState == ConnectionState.ERROR) "Connect" else "Disconnect")
                 }
             }
         }
@@ -73,10 +85,13 @@ fun SendspinSatelliteApp(
 private fun DisconnectedPreview() {
     SendspinSatelliteApp(
         state = ConnectionUiState(
-            serverAddress = "https://sendspin.example",
+            serverAddress = "ws://server.local:8927/sendspin",
             connectionState = ConnectionState.DISCONNECTED,
         ),
         onServerAddressChanged = {},
-        onSaveServerAddress = {},
+        onConnect = {},
+        onDisconnect = {},
     )
 }
+
+private fun formatMilliseconds(valueUs: Long?): String = valueUs?.let { "%.2f ms".format(it / 1_000.0) } ?: "—"

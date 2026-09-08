@@ -1,4 +1,4 @@
-package com.jockgu.sendspinsatellite
+package com.nanopixel.sendspinsatellite
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -7,8 +7,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.jockgu.sendspinsatellite.connection.ConnectionViewModel
-import com.jockgu.sendspinsatellite.ui.SendspinSatelliteApp
+import com.nanopixel.sendspinsatellite.connection.ConnectionViewModel
+import com.nanopixel.sendspinsatellite.ui.SendspinSatelliteApp
 
 class MainActivity : ComponentActivity() {
     private val connectionViewModel: ConnectionViewModel by viewModels()
@@ -21,7 +21,8 @@ class MainActivity : ComponentActivity() {
             SendspinSatelliteApp(
                 state = state,
                 onServerAddressChanged = connectionViewModel::updateServerAddress,
-                onSaveServerAddress = connectionViewModel::saveServerAddress,
+                onConnect = connectionViewModel::connect,
+                onDisconnect = connectionViewModel::disconnect,
             )
         }
     }
