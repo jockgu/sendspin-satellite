@@ -57,13 +57,21 @@ own timing calculations.
 
 Goal: play scheduled PCM correctly before adding codec complexity.
 
-- [ ] Add Oboe audio output in the native engine.
-- [ ] Support PCM only.
-- [ ] Add bounded, generation-tagged PCM timeline and render FIFO buffers.
-- [ ] Implement `stream/start` and `stream/clear`; stale generations must never
+- [x] Use the official `sendspin-cpp` library for native transport, protocol,
+  decoding, and clock scheduling; do not duplicate that data path here.
+- [x] Add its minimal `PlayerRoleListener.on_stream_clear()` callback upstream,
+  then pin the exact upstream commit until it is included in a release. The
+  Android output calls its generation invalidation from this callback, so old
+  PCM can never render after a seek or track jump.
+- [x] Keep the Android-native code limited to Oboe output and the bounded,
+  generation-tagged PCM FIFO.
+- [x] Add Oboe audio output in the native engine.
+- [x] Support PCM only.
+- [x] Add bounded, generation-tagged PCM timeline and render FIFO buffers.
+- [x] Implement `stream/start` and `stream/clear`; stale generations must never
   render.
-- [ ] Keep the audio callback allocation-free and non-blocking.
-- [ ] Recover from underrun by returning to buffering.
+- [x] Keep the audio callback allocation-free and non-blocking.
+- [x] Recover from underrun by returning to buffering.
 
 **Acceptance:** A controlled PCM stream plays continuously, starts on schedule,
 and never leaks audio across a stream restart.

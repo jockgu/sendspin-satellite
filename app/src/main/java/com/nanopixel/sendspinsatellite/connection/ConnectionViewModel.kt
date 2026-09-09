@@ -82,7 +82,7 @@ private fun SendspinSession.SessionState.detail(): String = when (this) {
     SendspinSession.SessionState.CONNECTING -> "Opening a Sendspin connection."
     SendspinSession.SessionState.HANDSHAKING -> "Establishing the encrypted Sendspin session."
     SendspinSession.SessionState.SYNCHRONISING -> "Measuring the server clock."
-    SendspinSession.SessionState.SYNCHRONISED -> "Clock synchronised. Audio playback is intentionally unavailable until Phase 3."
+    SendspinSession.SessionState.SYNCHRONISED -> "Clock synchronised. Native PCM playback is ready."
     SendspinSession.SessionState.DISCONNECTED -> "Disconnected from Sendspin server."
     SendspinSession.SessionState.ERROR -> "The Sendspin connection failed."
 }

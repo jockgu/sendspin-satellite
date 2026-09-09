@@ -5,6 +5,7 @@ plugins {
 
 android {
     namespace = "com.nanopixel.sendspinsatellite"
+    ndkVersion = "30.0.16248370"
     compileSdk {
         version = release(37)
     }
@@ -17,6 +18,12 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            cmake {
+                arguments("-DANDROID_STL=c++_shared")
+            }
+        }
     }
 
     buildTypes {
@@ -33,6 +40,7 @@ android {
 
     buildFeatures {
         compose = true
+        prefab = true
     }
 
     externalNativeBuild {
@@ -60,8 +68,7 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation(libs.okhttp)
-    implementation(libs.bouncycastle)
+    implementation(libs.oboe)
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)

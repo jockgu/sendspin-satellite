@@ -1,4 +1,5 @@
 #include <cassert>
+#include <limits>
 
 #include "clock_filter.h"
 
@@ -19,6 +20,12 @@ void stable_samples_converge() {
 void rejects_invalid_and_resets() {
     sendspin::ClockFilter filter;
     filter.update(100, 200, 600, 300);
+    assert(filter.diagnostics().samples == 0);
+    filter.update(
+        std::numeric_limits<std::int64_t>::min(),
+        std::numeric_limits<std::int64_t>::max(),
+        std::numeric_limits<std::int64_t>::max(),
+        std::numeric_limits<std::int64_t>::min());
     assert(filter.diagnostics().samples == 0);
     filter.update(1'000, 11'000, 11'100, 3'100);
     filter.reset();
