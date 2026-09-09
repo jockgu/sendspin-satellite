@@ -39,7 +39,7 @@ class SendspinSession(
     private val clientId = NoiseTransport.base64Url(
         org.bouncycastle.crypto.params.X25519PrivateKeyParameters(identity, 0).generatePublicKey().encoded,
     )
-    private val clock = ClockSynchronizer()
+    private val clock = NativeClockEngine()
     private val httpClient = OkHttpClient()
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
     private var socket: WebSocket? = null
@@ -73,6 +73,7 @@ class SendspinSession(
 
     fun shutdown() {
         close()
+        clock.close()
         scheduler.shutdownNow()
         httpClient.dispatcher.executorService.shutdown()
     }
@@ -190,14 +191,21 @@ class SendspinSession(
                 startClockSync()
             }
             "server/time" -> {
-                clock.update(
+                val clockDiagnostics = clock.update(
                     payload.getLong("client_transmitted"),
                     payload.getLong("server_received"),
                     payload.getLong("server_transmitted"),
                     monotonicUs(),
                 )
-                listener.onDiagnostics(Diagnostics(serverName, clock.roundTripUs, clock.offsetUs, clock.sampleCount))
-                if (clock.isConverged && !sentUnavailableState) {
+                listener.onDiagnostics(
+                    Diagnostics(
+                        serverName,
+                        clockDiagnostics.roundTripUs,
+                        clockDiagnostics.offsetUs,
+                        clockDiagnostics.sampleCount,
+                    ),
+                )
+                if (clockDiagnostics.isConverged && !sentUnavailableState) {
                     sentUnavailableState = true
                     sendUnavailablePlayerState()
                     listener.onState(SessionState.SYNCHRONISED)
