@@ -13,7 +13,7 @@ class SendspinSession(
         fun onDiagnostics(diagnostics: Diagnostics)
     }
 
-    enum class SessionState { CONNECTING, HANDSHAKING, SYNCHRONISING, SYNCHRONISED, DISCONNECTED, ERROR }
+    enum class SessionState { CONNECTING, HANDSHAKING, SYNCHRONISING, SYNCHRONISED, RECOVERING, DISCONNECTED, ERROR }
 
     data class Diagnostics(
         val serverName: String? = null,
@@ -53,9 +53,13 @@ class SendspinSession(
         if (state == lastState) return
         lastState = state
         when (state) {
-            NativePlaybackEngine.State.DISCONNECTED -> listener.onState(SessionState.DISCONNECTED)
+            NativePlaybackEngine.State.STOPPED -> listener.onState(SessionState.DISCONNECTED)
             NativePlaybackEngine.State.CONNECTING -> listener.onState(SessionState.CONNECTING)
-            NativePlaybackEngine.State.READY -> listener.onState(SessionState.SYNCHRONISED)
+            NativePlaybackEngine.State.SYNCHRONISING -> listener.onState(SessionState.SYNCHRONISING)
+            NativePlaybackEngine.State.READY,
+            NativePlaybackEngine.State.BUFFERING,
+            NativePlaybackEngine.State.PLAYING -> listener.onState(SessionState.SYNCHRONISED)
+            NativePlaybackEngine.State.RECOVERING -> listener.onState(SessionState.RECOVERING)
             NativePlaybackEngine.State.ERROR -> {
                 listener.onState(SessionState.ERROR)
                 listener.onDiagnostics(Diagnostics(message = "Native Sendspin connection failed."))

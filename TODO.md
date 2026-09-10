@@ -4,6 +4,11 @@ This project should grow through small, verifiable vertical slices. Playback
 reliability and timing correctness take priority over UI breadth and feature
 count.
 
+The intended end state is a thin Android endpoint: after user activation, the
+foreground service keeps the configured player ready without the Activity
+being open. This does not promise automatic audio restart after a device reboot
+or user Force Stop; ordinary Android requires the user to activate it again.
+
 ## Phase 0 — application shell ✅
 
 - [x] Compose application with a simple connection screen.

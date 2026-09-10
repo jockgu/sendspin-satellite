@@ -30,6 +30,21 @@ void clear_never_renders_old_generation() {
     assert(output == new_audio);
 }
 
+void repeated_clears_never_restore_old_audio() {
+    sendspin::PcmRenderFifo fifo;
+    const std::array<int16_t, 4> old_audio{1, 1, 1, 1};
+    const std::array<int16_t, 4> new_audio{2, 2, 2, 2};
+    std::array<int16_t, 4> output{};
+
+    assert(fifo.write(old_audio.data(), 2) == 2);
+    fifo.clear();
+    fifo.clear();
+    assert(fifo.write(new_audio.data(), 2) == 2);
+    const auto result = fifo.pull(output.data(), 2);
+    assert(!result.underrun);
+    assert(output == new_audio);
+}
+
 void fifo_is_bounded_and_silences_underruns() {
     sendspin::PcmRenderFifo fifo;
     std::array<int16_t, sendspin::PcmRenderFifo::kBlockFrames * 2> block{};
@@ -51,5 +66,6 @@ void fifo_is_bounded_and_silences_underruns() {
 int main() {
     renders_pcm_in_order();
     clear_never_renders_old_generation();
+    repeated_clears_never_restore_old_audio();
     fifo_is_bounded_and_silences_underruns();
 }

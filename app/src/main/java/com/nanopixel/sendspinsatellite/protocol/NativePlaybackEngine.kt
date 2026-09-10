@@ -21,7 +21,7 @@ class NativePlaybackEngine(
 
     private fun requireOpen(): Long = check(handle != 0L) { "Native playback engine is closed" }.let { handle }
 
-    enum class State { DISCONNECTED, CONNECTING, READY, ERROR }
+    enum class State { STOPPED, CONNECTING, SYNCHRONISING, READY, BUFFERING, PLAYING, RECOVERING, ERROR }
 
     private companion object {
         init { System.loadLibrary("sendspin_native") }

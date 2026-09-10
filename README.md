@@ -17,7 +17,18 @@ Known alpha limitations:
 - Android emulator audio quality/timing is not representative of real hardware.
 - Full resilience features (focus/route/device-loss/network recovery/soak hardening) are Phase 4 scope.
 
-## Protocol compatibility requirement
+## Sendspin compatibility
+
+Sendspin Satellite supports the encrypted Sendspin protocol generation (core
+protocol v1 and `player@v1`). Earlier pre-encryption Sendspin implementations
+are not supported.
+
+Compatible additive protocol extensions are tolerated where the Sendspin
+specification defines them. A future core or role protocol version is supported
+only after deliberate interoperability testing with Music Assistant; it is not
+assumed compatible merely because it is newer.
+
+### Alpha test target
 
 This alpha branch now assumes server behavior compatible with:
 - **aiosendspin 9.1.1** (as shipped with Music Assistant 2.10.2 dependency set)

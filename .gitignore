@@ -14,6 +14,4 @@
 .externalNativeBuild
 .cxx
 local.properties
-AGENTS.md
 ARCHITECTURE.md
-NORTH_STAR.md

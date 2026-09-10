@@ -7,6 +7,11 @@ the activity being present. It responds predictably to focus loss, output
 device replacement, temporary network loss, and a server restart. Its failure
 and recovery behaviour is measurable.
 
+This is the foundation for a thin Android endpoint: once activated by the
+user, the foreground service keeps the player ready without the UI open. It
+does not attempt to start media playback unattended after device reboot or a
+user Force Stop.
+
 These phases do not change the playback protocol or add codecs. Manual server
 configuration remains the connection method until Phase 7.
 

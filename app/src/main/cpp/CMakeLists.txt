@@ -9,6 +9,10 @@ add_library(pcm_render_fifo STATIC pcm_render_fifo.cpp)
 target_compile_features(pcm_render_fifo PUBLIC cxx_std_20)
 target_include_directories(pcm_render_fifo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+add_library(playback_recovery_state STATIC playback_recovery_state.cpp)
+target_compile_features(playback_recovery_state PUBLIC cxx_std_20)
+target_include_directories(playback_recovery_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 if(ANDROID)
     find_package(oboe REQUIRED CONFIG)
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -25,7 +29,7 @@ if(ANDROID)
         native_playback_engine.cpp
         oboe_pcm_output.cpp
         sendspin_pcm_listener.cpp)
-    target_link_libraries(sendspin_native PRIVATE clock_filter pcm_render_fifo oboe::oboe sendspin)
+    target_link_libraries(sendspin_native PRIVATE clock_filter pcm_render_fifo playback_recovery_state oboe::oboe sendspin)
     target_compile_features(sendspin_native PRIVATE cxx_std_20)
 endif()
 
@@ -39,5 +43,9 @@ if(NOT ANDROID)
         add_executable(pcm_render_fifo_test pcm_render_fifo_test.cpp)
         target_link_libraries(pcm_render_fifo_test PRIVATE pcm_render_fifo)
         add_test(NAME pcm_render_fifo_test COMMAND pcm_render_fifo_test)
+
+        add_executable(playback_recovery_state_test playback_recovery_state_test.cpp)
+        target_link_libraries(playback_recovery_state_test PRIVATE playback_recovery_state)
+        add_test(NAME playback_recovery_state_test COMMAND playback_recovery_state_test)
     endif()
 endif()

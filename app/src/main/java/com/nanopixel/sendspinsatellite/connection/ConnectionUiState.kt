@@ -6,6 +6,7 @@ enum class ConnectionState(val label: String) {
     CONNECTING("Connecting"),
     HANDSHAKING("Handshaking"),
     SYNCHRONISING("Synchronising"),
+    RECOVERING("Recovering"),
     READY("Synchronised"),
     ERROR("Error"),
 }

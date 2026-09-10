@@ -13,6 +13,11 @@ size_t SendspinPcmListener::on_audio_write(uint8_t* data, const size_t length, u
 
 void SendspinPcmListener::on_stream_clear() {
     output_.clear();
+    if (stream_observer_ != nullptr) stream_observer_(stream_observer_context_);
+}
+
+void SendspinPcmListener::on_stream_start() {
+    if (stream_observer_ != nullptr) stream_observer_(stream_observer_context_);
 }
 
 }  // namespace sendspin

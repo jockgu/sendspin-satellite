@@ -9,34 +9,42 @@
 #include <sendspin/player_role.h>
 
 #include "oboe_pcm_output.h"
+#include "playback_recovery_state.h"
 #include "sendspin_pcm_listener.h"
 
 namespace sendspin {
 
 class NativePlaybackEngine final : public SendspinClientListener, public SendspinNetworkProvider {
 public:
-    enum class State : int32_t { Disconnected, Connecting, Ready, Error };
+    using State = PlaybackRecoveryState::State;
     explicit NativePlaybackEngine(std::string client_id);
     ~NativePlaybackEngine();
     bool connect(std::string url);
     void disconnect();
+    void request_recovery();
     [[nodiscard]] State state() const;
     bool is_network_ready() override;
     void on_time_sync_updated(float) override;
 
 private:
     static void on_frames_played(void* context, uint32_t frames);
+    static void on_stream_started(void* context);
+    void publish_state();
     void run();
 
     OboePcmOutput output_;
     SendspinPcmListener listener_;
     SendspinClient client_;
     PlayerRole& player_;
-    std::atomic<State> state_{State::Disconnected};
+    PlaybackRecoveryState recovery_state_;
+    std::atomic<State> state_{State::Stopped};
     std::atomic<bool> running_{false};
     std::mutex control_mutex_;
     std::string pending_url_;
     bool disconnect_requested_{false};
+    std::atomic<bool> recovery_requested_{false};
+    std::atomic<bool> buffering_requested_{false};
+    std::atomic<bool> playing_requested_{false};
     std::thread loop_thread_;
 };
 
