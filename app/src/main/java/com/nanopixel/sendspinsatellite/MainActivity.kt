@@ -21,6 +21,7 @@ class MainActivity : ComponentActivity() {
             SendspinSatelliteApp(
                 state = state,
                 onServerAddressChanged = connectionViewModel::updateServerAddress,
+                onPlayerNameChanged = connectionViewModel::updatePlayerName,
                 onConnect = connectionViewModel::connect,
                 onDisconnect = connectionViewModel::disconnect,
             )

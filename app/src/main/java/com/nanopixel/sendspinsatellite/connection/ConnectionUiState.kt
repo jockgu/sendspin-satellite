@@ -13,6 +13,8 @@ enum class ConnectionState(val label: String) {
 
 data class ConnectionUiState(
     val serverAddress: String = "",
+    val playerName: String = PlayerNamePolicy.defaultName,
+    val playerNameError: String? = null,
     val connectionState: ConnectionState = ConnectionState.DISCONNECTED,
     val detail: String = "Enter the address of your Sendspin server.",
     val serverName: String? = null,

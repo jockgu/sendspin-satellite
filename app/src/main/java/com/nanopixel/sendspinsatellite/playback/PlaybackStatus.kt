@@ -12,8 +12,7 @@ data class PlaybackStatus(
     val clockSamples: Int = 0,
 )
 
-fun PlaybackStatus.toUiState(serverAddress: String) = ConnectionUiState(
-    serverAddress = serverAddress,
+fun PlaybackStatus.toUiState(current: ConnectionUiState) = current.copy(
     connectionState = connectionState,
     detail = detail,
     serverName = serverName,

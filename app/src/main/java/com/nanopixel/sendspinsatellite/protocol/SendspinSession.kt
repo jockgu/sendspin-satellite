@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit
 
 class SendspinSession(
     context: Context,
+    playerName: String,
     private val listener: Listener,
 ) {
     interface Listener {
@@ -23,7 +24,7 @@ class SendspinSession(
         val message: String? = null,
     )
 
-    private val engine = NativePlaybackEngine(context)
+    private val engine = NativePlaybackEngine(context, playerName)
     private val poller = Executors.newSingleThreadScheduledExecutor()
     private var lastState: NativePlaybackEngine.State? = null
 

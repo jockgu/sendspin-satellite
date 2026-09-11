@@ -5,8 +5,9 @@ import android.provider.Settings
 
 class NativePlaybackEngine(
     context: Context,
+    playerName: String,
 ) : AutoCloseable {
-    private var handle = nativeCreate(resolveClientId(context))
+    private var handle = nativeCreate(resolveClientId(context), playerName)
 
     fun connect(url: String): Boolean = nativeConnect(requireOpen(), url)
     fun disconnect() { if (handle != 0L) nativeDisconnect(handle) }
@@ -30,7 +31,7 @@ class NativePlaybackEngine(
             return if (androidId.isNullOrBlank()) "android-unknown-client" else "android-$androidId"
         }
 
-        @JvmStatic private external fun nativeCreate(clientId: String): Long
+        @JvmStatic private external fun nativeCreate(clientId: String, playerName: String): Long
         @JvmStatic private external fun nativeDestroy(handle: Long)
         @JvmStatic private external fun nativeConnect(handle: Long, url: String): Boolean
         @JvmStatic private external fun nativeDisconnect(handle: Long)

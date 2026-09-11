@@ -17,7 +17,7 @@ namespace sendspin {
 class NativePlaybackEngine final : public SendspinClientListener, public SendspinNetworkProvider {
 public:
     using State = PlaybackRecoveryState::State;
-    explicit NativePlaybackEngine(std::string client_id);
+    NativePlaybackEngine(std::string client_id, std::string player_name);
     ~NativePlaybackEngine();
     bool connect(std::string url);
     void disconnect();

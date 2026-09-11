@@ -6,7 +6,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +29,7 @@ import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
 fun SendspinSatelliteApp(
     state: ConnectionUiState,
     onServerAddressChanged: (String) -> Unit,
+    onPlayerNameChanged: (String) -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
 ) {
@@ -33,8 +38,11 @@ fun SendspinSatelliteApp(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .imePadding()
+                    .safeDrawingPadding()
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.Top,
             ) {
                 Text("Sendspin Satellite", style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(8.dp))
@@ -58,6 +66,19 @@ fun SendspinSatelliteApp(
                 }
                 Spacer(Modifier.height(32.dp))
 
+                OutlinedTextField(
+                    value = state.playerName,
+                    onValueChange = onPlayerNameChanged,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    isError = state.playerNameError != null,
+                    label = { Text("Player name") },
+                    supportingText = {
+                        Text(state.playerNameError ?: "Shown to the Sendspin server; applies on the next connection.")
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                )
+                Spacer(Modifier.height(16.dp))
                 OutlinedTextField(
                     value = state.serverAddress,
                     onValueChange = onServerAddressChanged,
@@ -89,6 +110,7 @@ private fun DisconnectedPreview() {
             connectionState = ConnectionState.DISCONNECTED,
         ),
         onServerAddressChanged = {},
+            onPlayerNameChanged = {},
         onConnect = {},
         onDisconnect = {},
     )

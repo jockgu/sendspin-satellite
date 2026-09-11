@@ -90,20 +90,24 @@ distinguish multiple Android players on the Sendspin server.
   the Activity only observes and controls it.
 - [x] Add a functional notification with status and a Stop action. Do not add
   MediaSession, artwork, or playback UI in this phase.
-- [ ] Persist a user-editable player name alongside the server address, with a
+- [x] Persist a user-editable player name alongside the server address, with a
   useful default and validation for blank or overlong names.
-- [ ] Add the player-name field to the existing connection screen; do not add a
+- [x] Add the player-name field to the existing connection screen; do not add a
   separate settings/navigation layer for this single option.
-- [ ] Pass the name through `ConnectionViewModel`, `PlaybackService`, and
+- [x] Make the connection screen vertically scrollable and IME-safe so the
+  server address and Connect button remain reachable on small displays.
+- [x] Validate the scrollable connection screen in portrait, landscape, and
+  with the keyboard open on the smallest supported physical display.
+- [x] Pass the name through `ConnectionViewModel`, `PlaybackService`, and
   `SendspinSession` into native `SendspinClientConfig.name`.
-- [ ] Keep `product_name`, manufacturer, software version, and stable device
+- [x] Keep `product_name`, manufacturer, software version, and stable device
   client ID application-controlled; changing the display name must not change
   protocol identity.
-- [ ] Ensure recovery/reconnect reuses the active name and a new connection
+- [x] Ensure recovery/reconnect reuses the active name and a new connection
   uses the latest persisted name.
-- [ ] Validate on a physical device: background, rotate, and remove the task
+- [x] Validate on a physical device: background, rotate, and remove the task
   while playing; the service remains in control and Stop ends it cleanly.
-- [ ] Verify two devices with distinct names are unambiguous in the Sendspin
+- [x] Verify two devices with distinct names are unambiguous in the Sendspin
   server player list, including after renaming and reconnecting.
 
 **Acceptance:** an explicitly connected PCM session outlives the Activity and

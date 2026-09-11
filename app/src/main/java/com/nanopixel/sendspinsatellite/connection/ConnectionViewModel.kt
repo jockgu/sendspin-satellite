@@ -1,6 +1,8 @@
 package com.nanopixel.sendspinsatellite.connection
 
 import android.app.Application
+import android.os.Build
+import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nanopixel.sendspinsatellite.playback.PlaybackService
@@ -13,14 +15,18 @@ import kotlinx.coroutines.flow.asStateFlow
 class ConnectionViewModel(application: Application) : AndroidViewModel(application) {
     private val app = getApplication<Application>()
     private val preferences = app.getSharedPreferences(PREFERENCES_NAME, Application.MODE_PRIVATE)
+    private val defaultPlayerName = PlayerNamePolicy.defaultFor(Build.MODEL)
     private val _uiState = MutableStateFlow(
-        ConnectionUiState(serverAddress = preferences.getString(SERVER_ADDRESS_KEY, "").orEmpty()),
+        ConnectionUiState(
+            serverAddress = preferences.getString(SERVER_ADDRESS_KEY, "").orEmpty(),
+            playerName = preferences.getString(PLAYER_NAME_KEY, null) ?: defaultPlayerName,
+        ),
     )
     val uiState: StateFlow<ConnectionUiState> = _uiState.asStateFlow()
     init {
         viewModelScope.launch {
             PlaybackService.state.collect { status ->
-                _uiState.value = status.toUiState(_uiState.value.serverAddress)
+                _uiState.value = status.toUiState(_uiState.value)
             }
         }
     }
@@ -29,18 +35,43 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
         _uiState.value = _uiState.value.copy(serverAddress = address)
     }
 
+    fun updatePlayerName(name: String) {
+        val validation = PlayerNamePolicy.validate(name)
+        validation.normalized?.let { normalizedName ->
+            preferences.edit { putString(PLAYER_NAME_KEY, normalizedName) }
+        }
+        _uiState.value = _uiState.value.copy(
+            playerName = name,
+            playerNameError = validation.error,
+        )
+    }
+
     fun connect() {
-        val address = _uiState.value.serverAddress.trim()
+        val currentState = _uiState.value
+        val address = currentState.serverAddress.trim()
+        val playerName = PlayerNamePolicy.validate(currentState.playerName)
+        if (!playerName.isValid) {
+            _uiState.value = currentState.copy(playerNameError = playerName.error)
+            return
+        }
         if (!address.startsWith("ws://")) {
-            _uiState.value = _uiState.value.copy(
+            _uiState.value = currentState.copy(
                 connectionState = ConnectionState.ERROR,
                 detail = "Sendspin uses a ws:// server address, for example ws://server.local:8927/sendspin.",
             )
             return
         }
-        preferences.edit().putString(SERVER_ADDRESS_KEY, _uiState.value.serverAddress.trim()).apply()
-        _uiState.value = _uiState.value.copy(serverAddress = address)
-        PlaybackService.connect(app, address)
+        val normalizedPlayerName = playerName.normalized.orEmpty()
+        preferences.edit {
+            putString(SERVER_ADDRESS_KEY, address)
+            putString(PLAYER_NAME_KEY, normalizedPlayerName)
+        }
+        _uiState.value = currentState.copy(
+            serverAddress = address,
+            playerName = normalizedPlayerName,
+            playerNameError = null,
+        )
+        PlaybackService.connect(app, address, normalizedPlayerName)
     }
 
     fun disconnect() {
@@ -50,5 +81,6 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     private companion object {
         const val PREFERENCES_NAME = "sendspin_settings"
         const val SERVER_ADDRESS_KEY = "server_address"
+        const val PLAYER_NAME_KEY = "player_name"
     }
 }

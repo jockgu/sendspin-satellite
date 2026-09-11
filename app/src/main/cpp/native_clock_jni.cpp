@@ -56,16 +56,22 @@ Java_com_nanopixel_sendspinsatellite_protocol_NativeClockEngine_nativeUpdate(
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeCreate(
-    JNIEnv* env, jclass, jstring client_id) {
-    if (client_id == nullptr) {
+    JNIEnv* env, jclass, jstring client_id, jstring player_name) {
+    if (client_id == nullptr || player_name == nullptr) {
         return 0;
     }
-    const char* chars = env->GetStringUTFChars(client_id, nullptr);
-    if (chars == nullptr) {
+    const char* client_chars = env->GetStringUTFChars(client_id, nullptr);
+    if (client_chars == nullptr) {
         return 0;
     }
-    auto* engine = new NativePlaybackEngine(chars);
-    env->ReleaseStringUTFChars(client_id, chars);
+    const char* player_chars = env->GetStringUTFChars(player_name, nullptr);
+    if (player_chars == nullptr) {
+        env->ReleaseStringUTFChars(client_id, client_chars);
+        return 0;
+    }
+    auto* engine = new NativePlaybackEngine(client_chars, player_chars);
+    env->ReleaseStringUTFChars(player_name, player_chars);
+    env->ReleaseStringUTFChars(client_id, client_chars);
     return reinterpret_cast<jlong>(engine);
 }
 

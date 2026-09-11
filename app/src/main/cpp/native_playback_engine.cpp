@@ -4,10 +4,10 @@
 
 namespace sendspin {
 namespace {
-SendspinClientConfig client_config(const std::string& client_id) {
+SendspinClientConfig client_config(const std::string& client_id, const std::string& player_name) {
     SendspinClientConfig config;
     config.client_id = client_id;
-    config.name = "Sendspin Satellite";
+    config.name = player_name;
     config.product_name = "Sendspin Satellite";
     config.manufacturer = "Nanopixel";
     config.software_version = "0.1-alpha";
@@ -25,9 +25,9 @@ int64_t monotonic_us() {
 }
 }  // namespace
 
-NativePlaybackEngine::NativePlaybackEngine(std::string client_id)
+NativePlaybackEngine::NativePlaybackEngine(std::string client_id, std::string player_name)
     : listener_(output_, &NativePlaybackEngine::on_stream_started, this),
-      client_(client_config(client_id)),
+    client_(client_config(client_id, player_name)),
       player_(client_.add_player(player_config())) {
     client_.set_listener(this);
     client_.set_network_provider(this);

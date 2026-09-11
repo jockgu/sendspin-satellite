@@ -21,34 +21,27 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class PlaybackService : Service() {
-    private lateinit var session: SendspinSession
+    private var session: SendspinSession? = null
+    private var sessionGeneration = 0L
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        session = SendspinSession(applicationContext, object : SendspinSession.Listener {
-            override fun onState(state: SendspinSession.SessionState) {
-                publish(status.value.copy(connectionState = state.toConnectionState(), detail = state.detail()))
-            }
-
-            override fun onDiagnostics(diagnostics: SendspinSession.Diagnostics) {
-                publish(status.value.copy(
-                    serverName = diagnostics.serverName ?: status.value.serverName,
-                    roundTripUs = diagnostics.roundTripUs.takeIf { it > 0 },
-                    clockOffsetUs = diagnostics.offsetUs.takeIf { diagnostics.samples > 0 },
-                    clockSamples = diagnostics.samples,
-                    detail = diagnostics.message ?: status.value.detail,
-                ))
-            }
-        })
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_CONNECT -> {
                 startPlaybackForeground()
+                val address = intent.getStringExtra(EXTRA_SERVER_ADDRESS).orEmpty()
+                val playerName = intent.getStringExtra(EXTRA_PLAYER_NAME).orEmpty()
+                if (address.isBlank() || playerName.isBlank()) {
+                    publish(PlaybackStatus(ConnectionState.ERROR, "A server address and player name are required."))
+                    return START_NOT_STICKY
+                }
+                val activeSession = replaceSession(playerName)
                 publish(PlaybackStatus(ConnectionState.CONNECTING, "Opening a Sendspin connection."))
-                session.connect(intent.getStringExtra(EXTRA_SERVER_ADDRESS).orEmpty())
+                activeSession.connect(address)
             }
             ACTION_STOP -> stopPlayback()
         }
@@ -56,7 +49,7 @@ class PlaybackService : Service() {
     }
 
     override fun onDestroy() {
-        session.shutdown()
+        shutdownSession()
         publish(PlaybackStatus())
         super.onDestroy()
     }
@@ -73,9 +66,38 @@ class PlaybackService : Service() {
     }
 
     private fun stopPlayback() {
-        session.close()
+        shutdownSession()
+        publish(PlaybackStatus())
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun replaceSession(playerName: String): SendspinSession {
+        val generation = ++sessionGeneration
+        session?.shutdown()
+        return SendspinSession(applicationContext, playerName, object : SendspinSession.Listener {
+            override fun onState(state: SendspinSession.SessionState) {
+                if (generation != sessionGeneration) return
+                publish(status.value.copy(connectionState = state.toConnectionState(), detail = state.detail()))
+            }
+
+            override fun onDiagnostics(diagnostics: SendspinSession.Diagnostics) {
+                if (generation != sessionGeneration) return
+                publish(status.value.copy(
+                    serverName = diagnostics.serverName ?: status.value.serverName,
+                    roundTripUs = diagnostics.roundTripUs.takeIf { it > 0 },
+                    clockOffsetUs = diagnostics.offsetUs.takeIf { diagnostics.samples > 0 },
+                    clockSamples = diagnostics.samples,
+                    detail = diagnostics.message ?: status.value.detail,
+                ))
+            }
+        }).also { session = it }
+    }
+
+    private fun shutdownSession() {
+        sessionGeneration++
+        session?.shutdown()
+        session = null
     }
 
     private fun publish(nextStatus: PlaybackStatus) {
@@ -127,6 +149,7 @@ class PlaybackService : Service() {
         const val ACTION_CONNECT = "com.nanopixel.sendspinsatellite.action.CONNECT"
         const val ACTION_STOP = "com.nanopixel.sendspinsatellite.action.STOP"
         const val EXTRA_SERVER_ADDRESS = "server_address"
+        const val EXTRA_PLAYER_NAME = "player_name"
         const val NOTIFICATION_CHANNEL_ID = "playback"
         const val NOTIFICATION_ID = 1
 
@@ -152,12 +175,13 @@ class PlaybackService : Service() {
             SendspinSession.SessionState.ERROR -> "The Sendspin connection failed."
         }
 
-        internal fun connect(context: Context, address: String) {
+        internal fun connect(context: Context, address: String, playerName: String) {
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, PlaybackService::class.java)
                     .setAction(ACTION_CONNECT)
-                    .putExtra(EXTRA_SERVER_ADDRESS, address),
+                    .putExtra(EXTRA_SERVER_ADDRESS, address)
+                    .putExtra(EXTRA_PLAYER_NAME, playerName),
             )
         }
 
