@@ -145,26 +145,32 @@ work.
 Goal: recover from expected network/server failures and make long-running
 behaviour measurable.
 
-- [ ] Make the service-owned network provider reflect validated Android network
+- [x] Make the service-owned network provider reflect validated Android network
   state and avoid reconnecting while no validated network exists.
-- [ ] Reconnect after temporary network loss or server restart with bounded
+- [x] Reconnect after temporary network loss or server restart with bounded
   exponential backoff and jitter; disable transport auto-reconnect.
-- [ ] Reset clock state and start a new stream generation on every successful
+- [x] Reset clock state and start a new stream generation on every successful
   reconnect; never reuse old clock or PCM buffers.
-- [ ] Expose one fixed diagnostics snapshot covering generation, buffer depth,
+- [x] Expose one fixed diagnostics snapshot covering generation, buffer depth,
   output latency where available, underruns, output restarts, hard resyncs,
   clock diagnostics, reconnect counters, and the last recoverable failure.
-- [ ] Read diagnostics at a modest cadence while the service is active and
+- [x] Read diagnostics at a modest cadence while the service is active and
   retain the latest values for the simple status screen/logging.
-- [ ] Add deterministic tests for jitter, late PCM, stream clears, clock drift,
+- [x] Add deterministic tests for jitter, late PCM, stream clears, clock drift,
   network loss, server restart, retry cancellation, and hard-resync generation
   invalidation.
-- [ ] Add a host-run simulated playback soak test with bounded queues,
+- [x] Add a host-run simulated playback soak test with bounded queues,
   repeated recovery, no stale generations rendered, and eventual convergence.
-- [ ] Run a shorter soak version in CI and the long version manually before
-  release.
+- [x] Add the shorter soak version to CI and run the long version manually
+  before release.
 - [ ] Validate on a physical device with the screen off: Wi-Fi loss, server
   restart, and at least one physical route change recover with diagnostics.
+
+The native snapshot now reports output latency when Oboe provides it, clock
+error, convergence, samples, recovery counters, and the latest failure. The
+pinned public `sendspin-cpp` API does not expose true RTT, clock offset, or
+clock drift accessors, so those native snapshot fields remain `-1` until an
+upstream API is available. The physical-device release gate is still open.
 
 **Acceptance:** PCM playback recovers predictably from Wi-Fi loss and server
 restart, remains measurable over long runs, and never resumes after a user

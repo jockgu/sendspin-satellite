@@ -11,6 +11,8 @@ public:
         OutputError = 1u << 0,
         RouteChange = 1u << 1,
         FocusResume = 1u << 2,
+        NetworkLost = 1u << 3,
+        TransportLost = 1u << 4,
     };
     using RecoveryCauseMask = uint32_t;
 

@@ -4,18 +4,29 @@ Alpha Android Sendspin client focused on reliability-first playback.
 
 ## Current status (alpha)
 
-The project is currently validating **Phase 3** of the implementation plan: a native PCM playback vertical slice.
+The project is implementing **Phase 6** of the implementation plan: network
+recovery, fixed diagnostics, and soak hardening. The host recovery tests and
+virtual soak are passing; the physical-device release gate remains open.
 
 What is currently working:
 - Android app can connect to a Sendspin server and complete handshake/time sync.
 - Client now publishes a **9.1.1-compliant** `client/state` shape (`available` + required player timing fields).
 - Client is now listed as **available** by Music Assistant/aiosendspin in normal tests.
 - Native playback path is active via `sendspin-cpp` + Oboe, with bounded generation-aware FIFO handling.
+- Foreground-service recovery responds to validated network changes, transport
+  loss, output errors, route changes, and focus recovery with bounded retry.
+- A fixed native diagnostics snapshot is retained and logged at a modest rate.
+- The direct host tests and 24-hour virtual recovery soak pass; a 15-minute
+  short soak is configured for CI.
 
 Known alpha limitations:
-- Playback reliability and format behavior still vary by source type while Phase 3 testing continues.
+- Playback reliability and format behavior still vary by source type while
+  physical Phase 6 testing continues.
 - Android emulator audio quality/timing is not representative of real hardware.
-- Full resilience features (focus/route/device-loss/network recovery/soak hardening) are Phase 4 scope.
+- The physical screen-off, Wi-Fi loss, server restart, and route-change checks
+  are not yet complete.
+- The pinned public `sendspin-cpp` API does not expose true RTT, clock offset,
+  or clock drift accessors; those native snapshot fields remain `-1`.
 
 ## Sendspin compatibility
 
@@ -42,7 +53,7 @@ If you test against older Sendspin/aiosendspin servers, availability and playbac
 
 | Music Assistant | aiosendspin | Tested on | Connect | Available | Playback |
 | --- | --- | --- | --- | --- | --- |
-| 2.10.2 | 9.1.1 | Android Emulator | Yes | Yes | Partial (source-dependent during Phase 3) |
+| 2.10.2 | 9.1.1 | Android Emulator | Yes | Yes | Partial (source-dependent; physical recovery pending) |
 
 Notes:
 - This matrix reflects known-tested combinations only.
@@ -53,6 +64,7 @@ Notes:
 
 ```bash
 ./gradlew :app:assembleDebug
+./gradlew :app:testDebugUnitTest
 ```
 
 Install and test on a physical Android device for meaningful playback validation.
@@ -61,3 +73,4 @@ Install and test on a physical Android device for meaningful playback validation
 
 - Product and engineering direction: `AGENTS.md`, `NORTH_STAR.md`.
 - Implementation phases and acceptance targets: `TODO.md`.
+- Native host-test workflow: `.github/workflows/native-tests.yml`.

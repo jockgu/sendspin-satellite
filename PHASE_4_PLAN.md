@@ -166,6 +166,12 @@ generation; it never reuses the old clock or buffers.
 **Check:** toggle Wi-Fi, reboot the server, and restore each. Confirm retry
 count/backoff, fresh clock convergence, and a clean start before audio resumes.
 
+Implementation status: the service reports validated default-network state to
+the native engine. The native engine owns retry timing with an immediate first
+attempt, capped exponential backoff, bounded jitter, attempt timeout, fresh
+clock diagnostics, and a new recovery generation. The pinned transport's own
+auto-reconnect remains disabled.
+
 ### Phase 6. Expose a fixed diagnostics snapshot
 
 Add a single native snapshot with: engine state, current generation, render
@@ -183,6 +189,13 @@ metrics and no UI charting.
 meaningful counters advance without affecting the audio callback's allocation
 or locking behaviour.
 
+Implementation status: the fixed JNI snapshot has 17 values and is polled once
+per second while the service is active. It includes Oboe latency when
+available, FIFO depth, underruns, output restarts, hard resyncs, reconnect
+counters, clock error/convergence/sample count, and the last failure. The
+public pinned transport API does not currently expose true RTT, offset, or
+drift accessors, so those fields remain unavailable (`-1`).
+
 ### Phase 6. Build deterministic and soak coverage before calling it complete
 
 Keep tests outside Android where possible. Add a fake clock, fake transport
@@ -197,6 +210,10 @@ queue depth, no stale generation rendered, no counter overflow, and eventual
 convergence after each recoverable interruption. Run a shorter version in CI;
 run the long version manually before releases.
 
+The 15-minute CI mode and 24-hour virtual mode are wired through the native
+test CMake configuration and have also passed with the platform-free host
+sources using the direct compiler in the current environment.
+
 ### Phase 6 release gate
 
 Phase 6 is complete only when a physical device can play a PCM stream with
@@ -204,6 +221,9 @@ the screen off, survive activity destruction, recover from Wi-Fi loss/server
 restart and at least one physical route change, and provide diagnostics for
 each recovery. A long simulated soak must pass without stale PCM, queue
 growth, or unrecovered state.
+
+Current status: the host recovery and soak work is complete; physical-device
+screen-off, network, server-restart, and route-change validation remains.
 
 ## Phase 7 — server autodiscovery
 

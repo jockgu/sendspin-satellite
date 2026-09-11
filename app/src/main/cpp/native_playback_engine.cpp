@@ -1,6 +1,8 @@
 #include "native_playback_engine.h"
 
 #include <chrono>
+#include <cmath>
+#include <limits>
 
 namespace sendspin {
 namespace {
@@ -22,6 +24,11 @@ PlayerRoleConfig player_config() {
 int64_t monotonic_us() {
     return std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+bool has_cause(
+    const PlaybackRecoveryState::RecoveryCauseMask mask,
+    const PlaybackRecoveryState::RecoveryCause cause) {
+    return (mask & static_cast<PlaybackRecoveryState::RecoveryCauseMask>(cause)) != 0;
 }
 }  // namespace
 
@@ -65,6 +72,9 @@ void NativePlaybackEngine::disconnect() {
 void NativePlaybackEngine::request_recovery(const PlaybackRecoveryState::RecoveryCause cause) {
     recovery_state_.request_recovery(cause);
 }
+void NativePlaybackEngine::set_network_available(const bool available) {
+    network_available_.store(available, std::memory_order_release);
+}
 void NativePlaybackEngine::suspend_for_focus() {
     focus_suspended_.store(true, std::memory_order_release);
 }
@@ -72,10 +82,31 @@ void NativePlaybackEngine::resume_from_focus() {
     focus_suspended_.store(false, std::memory_order_release);
 }
 NativePlaybackEngine::State NativePlaybackEngine::state() const { return state_.load(); }
-bool NativePlaybackEngine::is_network_ready() { return true; }
-void NativePlaybackEngine::on_time_sync_updated(float) {
+NativePlaybackEngine::Diagnostics NativePlaybackEngine::diagnostics() const {
+    std::lock_guard lock(diagnostics_mutex_);
+    return diagnostics_;
+}
+bool NativePlaybackEngine::is_network_ready() {
+    return network_available_.load(std::memory_order_acquire);
+}
+void NativePlaybackEngine::on_time_sync_updated(const float error) {
     recovery_state_.synchronising();
     recovery_state_.ready();
+    reconnect_policy_.record_convergence();
+    if (reconnect_attempt_active_) {
+        record_reconnect_completion();
+        reconnect_attempt_active_ = false;
+    }
+    {
+        std::lock_guard lock(diagnostics_mutex_);
+        diagnostics_.clock_converged = true;
+        if (diagnostics_.clock_samples != std::numeric_limits<uint32_t>::max()) {
+            ++diagnostics_.clock_samples;
+        }
+        if (std::isfinite(error) && error >= 0.0F) {
+            diagnostics_.clock_error_us = static_cast<int64_t>(error);
+        }
+    }
     publish_state();
 }
 void NativePlaybackEngine::on_frames_played(void* context, uint32_t frames) {
@@ -88,7 +119,40 @@ void NativePlaybackEngine::on_stream_started(void* context) {
         true, std::memory_order_release);
 }
 void NativePlaybackEngine::publish_state() {
-    state_.store(recovery_state_.state(), std::memory_order_release);
+    const auto next_state = recovery_state_.state();
+    state_.store(next_state, std::memory_order_release);
+    std::lock_guard lock(diagnostics_mutex_);
+    diagnostics_.state = next_state;
+    diagnostics_.generation = recovery_state_.recovery_generation();
+    diagnostics_.queued_frames = output_.queued_frames();
+    diagnostics_.underruns = output_.underruns();
+    diagnostics_.output_latency_us = output_.latency_us();
+}
+void NativePlaybackEngine::refresh_output_diagnostics() {
+    std::lock_guard lock(diagnostics_mutex_);
+    diagnostics_.queued_frames = output_.queued_frames();
+    diagnostics_.underruns = output_.underruns();
+    diagnostics_.output_latency_us = output_.latency_us();
+}
+void NativePlaybackEngine::record_failure(const Failure failure) {
+    std::lock_guard lock(diagnostics_mutex_);
+    diagnostics_.last_failure = failure;
+}
+void NativePlaybackEngine::record_hard_resync() {
+    std::lock_guard lock(diagnostics_mutex_);
+    ++diagnostics_.hard_resyncs;
+}
+void NativePlaybackEngine::record_output_restart() {
+    std::lock_guard lock(diagnostics_mutex_);
+    ++diagnostics_.output_restarts;
+}
+void NativePlaybackEngine::record_reconnect_attempt() {
+    std::lock_guard lock(diagnostics_mutex_);
+    ++diagnostics_.reconnect_attempts;
+}
+void NativePlaybackEngine::record_reconnect_completion() {
+    std::lock_guard lock(diagnostics_mutex_);
+    ++diagnostics_.reconnect_completions;
 }
 void NativePlaybackEngine::run() {
     if (!client_.start_server()) {
@@ -99,7 +163,10 @@ void NativePlaybackEngine::run() {
     }
     std::string active_url;
     bool focus_suspended = false;
+    bool had_connection = false;
+    bool was_network_available = network_available_.load(std::memory_order_acquire);
     while (running_.load(std::memory_order_acquire)) {
+        const auto now_us = monotonic_us();
         if (output_.take_error_recovery_request()) {
             recovery_state_.request_recovery(PlaybackRecoveryState::RecoveryCause::OutputError);
         }
@@ -113,6 +180,9 @@ void NativePlaybackEngine::run() {
         }
         if (disconnect) {
             focus_suspended = false;
+            reconnect_policy_.cancel();
+            active_url.clear();
+            had_connection = false;
             recovery_state_.stop();
             publish_state();
             output_.stop();
@@ -122,6 +192,8 @@ void NativePlaybackEngine::run() {
         if (focus_suspend_requested && !focus_suspended) {
             focus_suspended = true;
             if (recovery_state_.suspend_for_focus()) {
+                reconnect_policy_.cancel();
+                reconnect_attempt_active_ = false;
                 output_.stop();
                 client_.disconnect(SendspinGoodbyeReason::RESTART);
                 publish_state();
@@ -131,26 +203,95 @@ void NativePlaybackEngine::run() {
             recovery_state_.request_recovery(
                 PlaybackRecoveryState::RecoveryCause::FocusResume);
         }
+        const bool network_available = network_available_.load(std::memory_order_acquire);
+        if (!network_available && was_network_available) {
+            recovery_state_.request_recovery(
+                PlaybackRecoveryState::RecoveryCause::NetworkLost);
+        }
+        was_network_available = network_available;
         if (!url.empty()) {
-            active_url = url;
+            active_url = std::move(url);
+            reconnect_policy_.cancel();
             recovery_state_.connect();
+            reconnect_policy_.request(now_us);
+            {
+                std::lock_guard lock(diagnostics_mutex_);
+                diagnostics_.clock_converged = false;
+                diagnostics_.clock_error_us = -1;
+                diagnostics_.clock_samples = 0;
+            }
             publish_state();
-            client_.connect_to(url);
         }
         const auto recovery_causes = focus_suspended
             ? PlaybackRecoveryState::RecoveryCauseMask{0}
             : recovery_state_.take_recovery_causes();
-        if (!disconnect && recovery_causes != 0 &&
-            (recovery_state_.begin_recovery() ||
-             recovery_state_.state() == PlaybackRecoveryState::State::Recovering)) {
-            publish_state();
-            const bool output_restarted = output_.restart();
-            client_.disconnect(SendspinGoodbyeReason::RESTART);
-            if (output_restarted && !active_url.empty() && recovery_state_.reconnect()) {
+        if (!disconnect && recovery_causes != 0) {
+            const bool already_recovering =
+                recovery_state_.state() == PlaybackRecoveryState::State::Recovering;
+            const bool began_recovery = recovery_state_.begin_recovery();
+            if (began_recovery || already_recovering) {
+                if (has_cause(recovery_causes,
+                              PlaybackRecoveryState::RecoveryCause::NetworkLost)) {
+                    record_failure(Failure::NetworkUnavailable);
+                    if (began_recovery) record_hard_resync();
+                } else if (has_cause(recovery_causes,
+                                     PlaybackRecoveryState::RecoveryCause::TransportLost)) {
+                    record_failure(Failure::TransportLost);
+                    if (began_recovery) record_hard_resync();
+                } else if (has_cause(recovery_causes,
+                                     PlaybackRecoveryState::RecoveryCause::OutputError)) {
+                    record_failure(Failure::OutputError);
+                } else if (has_cause(recovery_causes,
+                                     PlaybackRecoveryState::RecoveryCause::RouteChange)) {
+                    record_failure(Failure::RouteChange);
+                } else if (has_cause(recovery_causes,
+                                     PlaybackRecoveryState::RecoveryCause::FocusResume)) {
+                    record_failure(Failure::FocusResume);
+                }
+                if (reconnect_policy_.attempt_in_flight()) {
+                    reconnect_policy_.record_failure(now_us);
+                    reconnect_attempt_active_ = false;
+                }
+                publish_state();
+                const bool output_restarted = output_.restart();
+                record_output_restart();
+                client_.disconnect(SendspinGoodbyeReason::RESTART);
+                had_connection = false;
+                if (output_restarted) {
+                    reconnect_policy_.request(now_us);
+                } else {
+                    reconnect_policy_.cancel();
+                    record_failure(Failure::OutputRestartFailed);
+                    recovery_state_.fail();
+                    publish_state();
+                }
+            }
+        }
+        if (!disconnect && !focus_suspended && network_available && !active_url.empty() &&
+            reconnect_policy_.take_due_attempt(now_us)) {
+            const bool retrying =
+                recovery_state_.state() == PlaybackRecoveryState::State::Recovering;
+            bool can_connect = false;
+            if (retrying) {
+                can_connect = recovery_state_.reconnect();
+            } else if (recovery_state_.state() == PlaybackRecoveryState::State::Connecting) {
+                can_connect = true;
+            }
+            if (can_connect) {
+                if (retrying) {
+                    record_reconnect_attempt();
+                    reconnect_attempt_active_ = true;
+                }
+                {
+                    std::lock_guard lock(diagnostics_mutex_);
+                    diagnostics_.clock_converged = false;
+                    diagnostics_.clock_error_us = -1;
+                    diagnostics_.clock_samples = 0;
+                }
                 publish_state();
                 client_.connect_to(active_url);
             } else {
-                recovery_state_.fail();
+                reconnect_policy_.record_failure(now_us);
                 publish_state();
             }
         }
@@ -163,6 +304,26 @@ void NativePlaybackEngine::run() {
             recovery_state_.playing();
             publish_state();
         }
+        const bool connected = client_.is_connected();
+        if (had_connection && !connected) {
+            recovery_state_.request_recovery(
+                PlaybackRecoveryState::RecoveryCause::TransportLost);
+        }
+        had_connection = connected;
+        if (!focus_suspended && !connected && reconnect_policy_.attempt_timed_out(now_us)) {
+            client_.disconnect(SendspinGoodbyeReason::RESTART);
+            output_.clear();
+            const bool began_recovery = recovery_state_.begin_recovery();
+            if (began_recovery) {
+                record_hard_resync();
+                publish_state();
+            }
+            record_failure(Failure::HandshakeTimeout);
+            reconnect_policy_.record_failure(now_us);
+            reconnect_attempt_active_ = false;
+            publish_state();
+        }
+        refresh_output_diagnostics();
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     client_.disconnect(SendspinGoodbyeReason::USER_REQUEST);

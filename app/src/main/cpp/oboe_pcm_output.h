@@ -25,7 +25,8 @@ public:
     void clear();
     void set_playback_observer(PlaybackObserver observer, void* context);
     [[nodiscard]] uint32_t queued_frames() const;
-    [[nodiscard]] uint32_t take_underruns();
+    [[nodiscard]] uint64_t underruns() const;
+    [[nodiscard]] int64_t latency_us() const;
     [[nodiscard]] bool take_error_recovery_request();
 
     oboe::DataCallbackResult onAudioReady(
@@ -40,7 +41,7 @@ private:
     std::shared_ptr<oboe::AudioStream> stream_;
     PlaybackObserver playback_observer_{nullptr};
     void* playback_observer_context_{nullptr};
-    std::atomic<uint32_t> underruns_{0};
+    std::atomic<uint64_t> underruns_{0};
     std::atomic<bool> stream_closed_by_oboe_{false};
     std::atomic<bool> error_recovery_requested_{false};
 };

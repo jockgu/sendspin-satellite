@@ -50,6 +50,8 @@ bool PlaybackRecoveryState::suspend_for_focus() {
 
 bool PlaybackRecoveryState::begin_recovery() {
     switch (state_) {
+        case State::Connecting:
+        case State::Synchronising:
         case State::Ready:
         case State::Buffering:
         case State::Playing:

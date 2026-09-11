@@ -60,8 +60,15 @@ uint32_t OboePcmOutput::queued_frames() const {
     return fifo_.queued_frames();
 }
 
-uint32_t OboePcmOutput::take_underruns() {
-    return underruns_.exchange(0, std::memory_order_acq_rel);
+uint64_t OboePcmOutput::underruns() const {
+    return underruns_.load(std::memory_order_acquire);
+}
+
+int64_t OboePcmOutput::latency_us() const {
+    if (!stream_) return -1;
+    const auto result = stream_->calculateLatencyMillis();
+    if (static_cast<oboe::Result>(result) != oboe::Result::OK) return -1;
+    return static_cast<int64_t>(result.value() * 1'000.0);
 }
 
 bool OboePcmOutput::take_error_recovery_request() {

@@ -1,5 +1,7 @@
 #include <jni.h>
 
+#include <iterator>
+
 #include "clock_filter.h"
 #include "native_playback_engine.h"
 
@@ -110,6 +112,12 @@ Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeDisconn
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeSetNetworkAvailable(
+    JNIEnv*, jclass, jlong handle, jboolean available) {
+    reinterpret_cast<NativePlaybackEngine*>(handle)->set_network_available(available == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeRequestRecovery(
     JNIEnv*, jclass, jlong handle, jint cause) {
     reinterpret_cast<NativePlaybackEngine*>(handle)->request_recovery(recovery_cause(cause));
@@ -131,4 +139,33 @@ extern "C" JNIEXPORT jint JNICALL
 Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeState(
     JNIEnv*, jclass, jlong handle) {
     return static_cast<jint>(reinterpret_cast<NativePlaybackEngine*>(handle)->state());
+}
+
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeDiagnostics(
+    JNIEnv* env, jclass, jlong handle) {
+    const auto snapshot = reinterpret_cast<NativePlaybackEngine*>(handle)->diagnostics();
+    const jlong values[] = {
+        static_cast<jlong>(snapshot.state),
+        static_cast<jlong>(snapshot.generation),
+        static_cast<jlong>(snapshot.queued_frames),
+        static_cast<jlong>(snapshot.fifo_capacity_frames),
+        static_cast<jlong>(snapshot.output_latency_us),
+        static_cast<jlong>(snapshot.underruns),
+        static_cast<jlong>(snapshot.output_restarts),
+        static_cast<jlong>(snapshot.hard_resyncs),
+        static_cast<jlong>(snapshot.reconnect_attempts),
+        static_cast<jlong>(snapshot.reconnect_completions),
+        static_cast<jlong>(snapshot.round_trip_us),
+        static_cast<jlong>(snapshot.clock_offset_us),
+        static_cast<jlong>(snapshot.clock_drift_ppm),
+        static_cast<jlong>(snapshot.clock_error_us),
+        static_cast<jlong>(snapshot.clock_samples),
+        snapshot.clock_converged ? 1 : 0,
+        static_cast<jlong>(snapshot.last_failure),
+    };
+    auto result = env->NewLongArray(static_cast<jsize>(std::size(values)));
+    if (result == nullptr) return nullptr;
+    env->SetLongArrayRegion(result, 0, static_cast<jsize>(std::size(values)), values);
+    return result;
 }

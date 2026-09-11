@@ -28,3 +28,19 @@ Before changing the protocol layer, keep these principles in mind:
 
 This document is engineering memory, not a replacement for the Sendspin
 specification or server-specific release notes.
+
+## Phase 6 implementation notes
+
+- The parent native engine owns reconnect policy; the pinned `sendspin-cpp`
+  transport auto-reconnect remains disabled.
+- The service forwards validated default-network state to native code. Native
+  recovery clears output, advances the generation, resets clock diagnostics,
+  and retries until explicit Stop.
+- The JNI diagnostics contract is one fixed 17-element snapshot. Oboe latency
+  is reported when available; clock error, convergence, and sample count are
+  populated from the public time-sync callback.
+- The pinned public transport API does not expose true RTT, clock offset, or
+  clock drift accessors. Keep those snapshot values at `-1` rather than using
+  private submodule internals.
+- The host recovery tests and 24-hour virtual soak pass with direct `g++`;
+  the 15-minute soak is registered in the CMake/CTest workflow for CI.

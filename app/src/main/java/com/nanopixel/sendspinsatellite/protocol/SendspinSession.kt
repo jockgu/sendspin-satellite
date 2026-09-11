@@ -22,6 +22,7 @@ class SendspinSession(
         val offsetUs: Long = 0,
         val samples: Int = 0,
         val message: String? = null,
+        val nativeSnapshot: NativePlaybackEngine.Diagnostics? = null,
     )
 
     private val engine = NativePlaybackEngine(context, playerName)
@@ -30,6 +31,7 @@ class SendspinSession(
 
     init {
         poller.scheduleAtFixedRate(::publishState, 0, 250, TimeUnit.MILLISECONDS)
+        poller.scheduleAtFixedRate(::publishDiagnostics, 0, 1, TimeUnit.SECONDS)
     }
 
     fun connect(address: String) {
@@ -38,6 +40,8 @@ class SendspinSession(
             listener.onDiagnostics(Diagnostics(message = "Unable to start native audio output."))
         }
     }
+
+    fun setNetworkAvailable(available: Boolean) = engine.setNetworkAvailable(available)
 
     fun requestOutputRecovery() = engine.requestOutputRecovery()
 
@@ -72,5 +76,11 @@ class SendspinSession(
                 listener.onDiagnostics(Diagnostics(message = "Native Sendspin connection failed."))
             }
         }
+    }
+
+    private fun publishDiagnostics() {
+        val snapshot = engine.diagnostics() ?: return
+        if (snapshot.state == NativePlaybackEngine.State.STOPPED) return
+        listener.onDiagnostics(Diagnostics(nativeSnapshot = snapshot))
     }
 }
