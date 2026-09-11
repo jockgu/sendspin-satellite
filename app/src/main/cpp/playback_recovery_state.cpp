@@ -22,6 +22,32 @@ void PlaybackRecoveryState::playing() {
     if (state_ == State::Buffering) state_ = State::Playing;
 }
 
+void PlaybackRecoveryState::request_recovery(const RecoveryCause cause) {
+    pending_recovery_causes_.fetch_or(static_cast<RecoveryCauseMask>(cause),
+                                      std::memory_order_release);
+}
+
+PlaybackRecoveryState::RecoveryCauseMask PlaybackRecoveryState::take_recovery_causes() {
+    return pending_recovery_causes_.exchange(0, std::memory_order_acq_rel);
+}
+
+bool PlaybackRecoveryState::suspend_for_focus() {
+    switch (state_) {
+        case State::Connecting:
+        case State::Synchronising:
+        case State::Ready:
+        case State::Buffering:
+        case State::Playing:
+            state_ = State::Recovering;
+            ++recovery_generation_;
+            return true;
+        case State::Recovering:
+            return true;
+        default:
+            return false;
+    }
+}
+
 bool PlaybackRecoveryState::begin_recovery() {
     switch (state_) {
         case State::Ready:
@@ -43,6 +69,7 @@ bool PlaybackRecoveryState::reconnect() {
 
 void PlaybackRecoveryState::stop() {
     state_ = State::Stopped;
+    pending_recovery_causes_.store(0, std::memory_order_release);
 }
 
 void PlaybackRecoveryState::fail() {

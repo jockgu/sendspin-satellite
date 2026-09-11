@@ -39,6 +39,12 @@ class SendspinSession(
         }
     }
 
+    fun requestOutputRecovery() = engine.requestOutputRecovery()
+
+    fun suspendForFocus() = engine.suspendForFocus()
+
+    fun resumeFromFocus() = engine.resumeFromFocus()
+
     fun close() {
         engine.disconnect()
         listener.onState(SessionState.DISCONNECTED)

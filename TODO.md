@@ -119,21 +119,21 @@ identified by their configured names without changing their stable identities.
 Goal: keep the output path truthful and recoverable through Android audio
 events without performing recovery in the real-time callback.
 
-- [ ] Add one explicit native recovery state machine with
+- [x] Add one explicit native recovery state machine with
   `Stopped -> Connecting -> Synchronising -> Ready -> Buffering -> Playing`
   and `Recovering -> Connecting` transitions; user Stop cancels retry.
-- [ ] Ensure every recovery invalidates the active PCM generation before
+- [x] Ensure every recovery invalidates the active PCM generation before
   reconnecting or resuming output.
-- [ ] Extend `OboePcmOutput` with an error callback that only records a restart
+- [x] Extend `OboePcmOutput` with an error callback that only records a restart
   request; the engine loop performs close/reopen and returns to buffering.
-- [ ] Register a service-owned `AudioDeviceCallback` for output route changes;
+- [x] Register a service-owned `AudioDeviceCallback` for output route changes;
   tolerate duplicate recovery requests and failed reopen attempts.
-- [ ] Add service-boundary audio focus using media audio attributes; handle
+- [x] Add service-boundary audio focus using media audio attributes; handle
   transient loss, gain, ducking, and permanent loss without playing without
   focus.
-- [ ] Add deterministic tests for state transitions, focus/output recovery,
+- [x] Add deterministic tests for state transitions, focus/output recovery,
   retry cancellation, and stream clears during generation changes.
-- [ ] Validate wired, Bluetooth, or USB route replacement where hardware is
+- [x] Validate wired, Bluetooth, or USB route replacement where hardware is
   available, including that pre-change PCM is never rendered.
 
 **Acceptance:** temporary focus loss and route/device replacement produce a

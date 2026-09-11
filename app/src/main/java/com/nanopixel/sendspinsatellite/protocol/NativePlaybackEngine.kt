@@ -11,6 +11,15 @@ class NativePlaybackEngine(
 
     fun connect(url: String): Boolean = nativeConnect(requireOpen(), url)
     fun disconnect() { if (handle != 0L) nativeDisconnect(handle) }
+    fun requestOutputRecovery() {
+        if (handle != 0L) nativeRequestRecovery(handle, RECOVERY_CAUSE_ROUTE_CHANGE)
+    }
+    fun suspendForFocus() {
+        if (handle != 0L) nativeSuspendForFocus(handle)
+    }
+    fun resumeFromFocus() {
+        if (handle != 0L) nativeResumeFromFocus(handle)
+    }
     fun state(): State = State.entries[nativeState(requireOpen())]
 
     override fun close() {
@@ -35,6 +44,11 @@ class NativePlaybackEngine(
         @JvmStatic private external fun nativeDestroy(handle: Long)
         @JvmStatic private external fun nativeConnect(handle: Long, url: String): Boolean
         @JvmStatic private external fun nativeDisconnect(handle: Long)
+        @JvmStatic private external fun nativeRequestRecovery(handle: Long, cause: Int)
+        @JvmStatic private external fun nativeSuspendForFocus(handle: Long)
+        @JvmStatic private external fun nativeResumeFromFocus(handle: Long)
         @JvmStatic private external fun nativeState(handle: Long): Int
+
+        private const val RECOVERY_CAUSE_ROUTE_CHANGE = 1
     }
 }

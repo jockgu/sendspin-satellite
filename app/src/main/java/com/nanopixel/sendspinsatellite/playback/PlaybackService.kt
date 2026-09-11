@@ -7,8 +7,15 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -23,6 +30,48 @@ import kotlinx.coroutines.flow.asStateFlow
 class PlaybackService : Service() {
     private var session: SendspinSession? = null
     private var sessionGeneration = 0L
+    private val audioManager by lazy { getSystemService(AudioManager::class.java) }
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+    private val focusPolicy = AudioFocusPolicy()
+    private var focusRequest: AudioFocusRequest? = null
+    private var deviceCallbackRegistered = false
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        val change = when (focusChange) {
+            AudioManager.AUDIOFOCUS_GAIN -> AudioFocusPolicy.Change.GAIN
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> AudioFocusPolicy.Change.LOSS_TRANSIENT
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK ->
+                AudioFocusPolicy.Change.LOSS_TRANSIENT_CAN_DUCK
+            AudioManager.AUDIOFOCUS_LOSS -> AudioFocusPolicy.Change.LOSS
+            else -> return@OnAudioFocusChangeListener
+        }
+        when (focusPolicy.onFocusChange(change)) {
+            AudioFocusPolicy.Action.SUSPEND -> {
+                session?.suspendForFocus()
+                publish(status.value.copy(
+                    connectionState = ConnectionState.RECOVERING,
+                    detail = "Audio focus is temporarily unavailable.",
+                ))
+            }
+            AudioFocusPolicy.Action.RESUME -> {
+                session?.resumeFromFocus()
+                publish(status.value.copy(
+                    connectionState = ConnectionState.RECOVERING,
+                    detail = "Audio focus returned. Re-buffering playback.",
+                ))
+            }
+            AudioFocusPolicy.Action.STOP -> stopPlayback()
+            else -> Unit
+        }
+    }
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<AudioDeviceInfo>) {
+            if (hasOutputDevice(addedDevices)) session?.requestOutputRecovery()
+        }
+
+        override fun onAudioDevicesRemoved(removedDevices: Array<AudioDeviceInfo>) {
+            if (hasOutputDevice(removedDevices)) session?.requestOutputRecovery()
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -39,7 +88,17 @@ class PlaybackService : Service() {
                     publish(PlaybackStatus(ConnectionState.ERROR, "A server address and player name are required."))
                     return START_NOT_STICKY
                 }
+                focusPolicy.onConnect()
+                if (!requestAudioFocus()) {
+                    focusPolicy.onFocusRequestResult(false)
+                    publish(PlaybackStatus(ConnectionState.ERROR, "Audio focus is unavailable."))
+                    ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+                focusPolicy.onFocusRequestResult(true)
                 val activeSession = replaceSession(playerName)
+                registerAudioDeviceCallback()
                 publish(PlaybackStatus(ConnectionState.CONNECTING, "Opening a Sendspin connection."))
                 activeSession.connect(address)
             }
@@ -49,7 +108,9 @@ class PlaybackService : Service() {
     }
 
     override fun onDestroy() {
+        unregisterAudioDeviceCallback()
         shutdownSession()
+        abandonAudioFocus()
         publish(PlaybackStatus())
         super.onDestroy()
     }
@@ -66,10 +127,65 @@ class PlaybackService : Service() {
     }
 
     private fun stopPlayback() {
+        focusPolicy.onStop()
+        unregisterAudioDeviceCallback()
         shutdownSession()
+        abandonAudioFocus()
         publish(PlaybackStatus())
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun requestAudioFocus(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build(),
+                )
+                .setWillPauseWhenDucked(true)
+                .setAcceptsDelayedFocusGain(false)
+                .setOnAudioFocusChangeListener(focusListener, mainHandler)
+                .build()
+            focusRequest = request
+            return audioManager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
+        return audioManager.requestAudioFocus(
+            focusListener,
+            AudioManager.STREAM_MUSIC,
+            AudioManager.AUDIOFOCUS_GAIN,
+        ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    private fun abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            focusRequest = null
+        } else {
+            audioManager.abandonAudioFocus(focusListener)
+        }
+    }
+
+    private fun registerAudioDeviceCallback() {
+        if (deviceCallbackRegistered) return
+        audioManager.registerAudioDeviceCallback(audioDeviceCallback, mainHandler)
+        deviceCallbackRegistered = true
+    }
+
+    private fun unregisterAudioDeviceCallback() {
+        if (!deviceCallbackRegistered) return
+        audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
+        deviceCallbackRegistered = false
+    }
+
+    private fun hasOutputDevice(devices: Array<AudioDeviceInfo>): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            devices.any { it.isSink }
+        } else {
+            devices.isNotEmpty()
+        }
     }
 
     private fun replaceSession(playerName: String): SendspinSession {

@@ -10,7 +10,9 @@
 
 namespace sendspin {
 
-class OboePcmOutput final : public oboe::AudioStreamDataCallback {
+class OboePcmOutput final
+        : public oboe::AudioStreamDataCallback,
+            public oboe::AudioStreamErrorCallback {
 public:
     using PlaybackObserver = void (*)(void*, uint32_t);
     OboePcmOutput() = default;
@@ -18,16 +20,20 @@ public:
 
     bool start();
     void stop();
+    bool restart();
     uint32_t write(const int16_t* samples, uint32_t frames);
     void clear();
     void set_playback_observer(PlaybackObserver observer, void* context);
     [[nodiscard]] uint32_t queued_frames() const;
     [[nodiscard]] uint32_t take_underruns();
+    [[nodiscard]] bool take_error_recovery_request();
 
     oboe::DataCallbackResult onAudioReady(
         oboe::AudioStream* stream,
         void* audio_data,
         int32_t num_frames) override;
+    bool onError(oboe::AudioStream* stream, oboe::Result error) override;
+    void onErrorAfterClose(oboe::AudioStream* stream, oboe::Result error) override;
 
 private:
     PcmRenderFifo fifo_;
@@ -35,6 +41,8 @@ private:
     PlaybackObserver playback_observer_{nullptr};
     void* playback_observer_context_{nullptr};
     std::atomic<uint32_t> underruns_{0};
+    std::atomic<bool> stream_closed_by_oboe_{false};
+    std::atomic<bool> error_recovery_requested_{false};
 };
 
 }  // namespace sendspin

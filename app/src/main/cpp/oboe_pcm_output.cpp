@@ -9,6 +9,8 @@ OboePcmOutput::~OboePcmOutput() {
 bool OboePcmOutput::start() {
     if (stream_) return true;
 
+    stream_closed_by_oboe_.store(false, std::memory_order_release);
+    error_recovery_requested_.store(false, std::memory_order_release);
     oboe::AudioStreamBuilder builder;
     builder.setDirection(oboe::Direction::Output);
     builder.setPerformanceMode(oboe::PerformanceMode::LowLatency);
@@ -17,6 +19,7 @@ bool OboePcmOutput::start() {
     builder.setChannelCount(PcmRenderFifo::kChannels);
     builder.setSampleRate(PcmRenderFifo::kSampleRate);
     builder.setDataCallback(this);
+    builder.setErrorCallback(this);
     if (builder.openStream(stream_) != oboe::Result::OK || !stream_ ||
         stream_->requestStart() != oboe::Result::OK) {
         stop();
@@ -26,11 +29,18 @@ bool OboePcmOutput::start() {
 }
 
 void OboePcmOutput::stop() {
-    if (!stream_) return;
-    stream_->stop();
-    stream_->close();
-    stream_.reset();
     clear();
+    if (!stream_) return;
+    if (!stream_closed_by_oboe_.exchange(false, std::memory_order_acq_rel)) {
+        stream_->stop();
+        stream_->close();
+    }
+    stream_.reset();
+}
+
+bool OboePcmOutput::restart() {
+    stop();
+    return start();
 }
 
 uint32_t OboePcmOutput::write(const int16_t* samples, const uint32_t frames) {
@@ -54,6 +64,10 @@ uint32_t OboePcmOutput::take_underruns() {
     return underruns_.exchange(0, std::memory_order_acq_rel);
 }
 
+bool OboePcmOutput::take_error_recovery_request() {
+    return error_recovery_requested_.exchange(false, std::memory_order_acq_rel);
+}
+
 oboe::DataCallbackResult OboePcmOutput::onAudioReady(
     oboe::AudioStream*,
     void* audio_data,
@@ -66,6 +80,15 @@ oboe::DataCallbackResult OboePcmOutput::onAudioReady(
         playback_observer_(playback_observer_context_, result.frames_from_fifo);
     }
     return oboe::DataCallbackResult::Continue;
+}
+
+bool OboePcmOutput::onError(oboe::AudioStream*, oboe::Result) {
+    return false;
+}
+
+void OboePcmOutput::onErrorAfterClose(oboe::AudioStream*, oboe::Result) {
+    stream_closed_by_oboe_.store(true, std::memory_order_release);
+    error_recovery_requested_.store(true, std::memory_order_release);
 }
 
 }  // namespace sendspin

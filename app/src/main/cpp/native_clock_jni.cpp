@@ -7,9 +7,21 @@ namespace {
 
 using sendspin::ClockFilter;
 using sendspin::NativePlaybackEngine;
+using RecoveryCause = sendspin::PlaybackRecoveryState::RecoveryCause;
 
 ClockFilter* filter(jlong handle) {
     return reinterpret_cast<ClockFilter*>(handle);
+}
+
+RecoveryCause recovery_cause(jint value) {
+    switch (value) {
+        case 1:
+            return RecoveryCause::RouteChange;
+        case 2:
+            return RecoveryCause::FocusResume;
+        default:
+            return RecoveryCause::OutputError;
+    }
 }
 
 }  // namespace
@@ -95,6 +107,24 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeDisconnect(
     JNIEnv*, jclass, jlong handle) {
     reinterpret_cast<NativePlaybackEngine*>(handle)->disconnect();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeRequestRecovery(
+    JNIEnv*, jclass, jlong handle, jint cause) {
+    reinterpret_cast<NativePlaybackEngine*>(handle)->request_recovery(recovery_cause(cause));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeSuspendForFocus(
+    JNIEnv*, jclass, jlong handle) {
+    reinterpret_cast<NativePlaybackEngine*>(handle)->suspend_for_focus();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeResumeFromFocus(
+    JNIEnv*, jclass, jlong handle) {
+    reinterpret_cast<NativePlaybackEngine*>(handle)->resume_from_focus();
 }
 
 extern "C" JNIEXPORT jint JNICALL
