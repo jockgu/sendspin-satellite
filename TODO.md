@@ -9,7 +9,7 @@ foreground service keeps the configured player ready without the Activity
 being open. This does not promise automatic audio restart after a device reboot
 or user Force Stop; ordinary Android requires the user to activate it again.
 
-## Phase 0 — application shell ✅
+## Phase 0 — application shell 
 
 - [x] Compose application with a simple connection screen.
 - [x] Explicit user-visible connection-state model.
@@ -83,29 +83,54 @@ and never leaks audio across a stream restart.
 
 ## Phase 4 — playback resilience
 
-Goal: make playback independent of the Activity lifecycle.
+Goal: make playback independent of the Activity lifecycle and let users
+distinguish multiple Android players on the Sendspin server.
 
 - [x] Move session/engine ownership into a minimal foreground playback service;
   the Activity only observes and controls it.
 - [x] Add a functional notification with status and a Stop action. Do not add
   MediaSession, artwork, or playback UI in this phase.
+- [ ] Persist a user-editable player name alongside the server address, with a
+  useful default and validation for blank or overlong names.
+- [ ] Add the player-name field to the existing connection screen; do not add a
+  separate settings/navigation layer for this single option.
+- [ ] Pass the name through `ConnectionViewModel`, `PlaybackService`, and
+  `SendspinSession` into native `SendspinClientConfig.name`.
+- [ ] Keep `product_name`, manufacturer, software version, and stable device
+  client ID application-controlled; changing the display name must not change
+  protocol identity.
+- [ ] Ensure recovery/reconnect reuses the active name and a new connection
+  uses the latest persisted name.
 - [ ] Validate on a physical device: background, rotate, and remove the task
   while playing; the service remains in control and Stop ends it cleanly.
+- [ ] Verify two devices with distinct names are unambiguous in the Sendspin
+  server player list, including after renaming and reconnecting.
 
 **Acceptance:** an explicitly connected PCM session outlives the Activity and
-can be ended reliably from the app or notification.
+can be ended reliably from the app or notification. Multiple devices can be
+identified by their configured names without changing their stable identities.
 
 ## Phase 5 — audio interruption and output recovery
 
 Goal: keep the output path truthful and recoverable through Android audio
 events without performing recovery in the real-time callback.
 
-- [ ] Add one explicit native recovery state machine; recovery always
-  invalidates the active PCM generation and user Stop cancels retry.
-- [ ] Handle audio focus, output route changes, and Oboe audio-device restart
-  outside the real-time callback.
-- [ ] Add deterministic tests for focus/output recovery and stream clears
-  during a generation change.
+- [ ] Add one explicit native recovery state machine with
+  `Stopped -> Connecting -> Synchronising -> Ready -> Buffering -> Playing`
+  and `Recovering -> Connecting` transitions; user Stop cancels retry.
+- [ ] Ensure every recovery invalidates the active PCM generation before
+  reconnecting or resuming output.
+- [ ] Extend `OboePcmOutput` with an error callback that only records a restart
+  request; the engine loop performs close/reopen and returns to buffering.
+- [ ] Register a service-owned `AudioDeviceCallback` for output route changes;
+  tolerate duplicate recovery requests and failed reopen attempts.
+- [ ] Add service-boundary audio focus using media audio attributes; handle
+  transient loss, gain, ducking, and permanent loss without playing without
+  focus.
+- [ ] Add deterministic tests for state transitions, focus/output recovery,
+  retry cancellation, and stream clears during generation changes.
+- [ ] Validate wired, Bluetooth, or USB route replacement where hardware is
+  available, including that pre-change PCM is never rendered.
 
 **Acceptance:** temporary focus loss and route/device replacement produce a
 clean re-buffer or user-visible stop, never stale audio or callback-thread
@@ -116,21 +141,31 @@ work.
 Goal: recover from expected network/server failures and make long-running
 behaviour measurable.
 
-- [ ] Reconnect only after validated network availability, with bounded backoff,
-  after temporary network loss and server restart.
-- [ ] Define and implement process-death/restart behaviour only after persisted
-  connection state can resume safely; do not accidentally restart after a user
-  Stop.
-- [ ] Expose one fixed diagnostics snapshot: buffers, underruns, output
-  restarts, resyncs, clock state, and reconnect counters.
-- [ ] Add deterministic tests for jitter, late packets, stream clears, clock
-  drift, output restart, and reconnection.
-- [ ] Add a long-running simulated playback/soak test with bounded queues and
-  repeated recovery.
+- [ ] Make the service-owned network provider reflect validated Android network
+  state and avoid reconnecting while no validated network exists.
+- [ ] Reconnect after temporary network loss or server restart with bounded
+  exponential backoff and jitter; disable transport auto-reconnect.
+- [ ] Reset clock state and start a new stream generation on every successful
+  reconnect; never reuse old clock or PCM buffers.
+- [ ] Expose one fixed diagnostics snapshot covering generation, buffer depth,
+  output latency where available, underruns, output restarts, hard resyncs,
+  clock diagnostics, reconnect counters, and the last recoverable failure.
+- [ ] Read diagnostics at a modest cadence while the service is active and
+  retain the latest values for the simple status screen/logging.
+- [ ] Add deterministic tests for jitter, late PCM, stream clears, clock drift,
+  network loss, server restart, retry cancellation, and hard-resync generation
+  invalidation.
+- [ ] Add a host-run simulated playback soak test with bounded queues,
+  repeated recovery, no stale generations rendered, and eventual convergence.
+- [ ] Run a shorter soak version in CI and the long version manually before
+  release.
+- [ ] Validate on a physical device with the screen off: Wi-Fi loss, server
+  restart, and at least one physical route change recover with diagnostics.
 
 **Acceptance:** PCM playback recovers predictably from Wi-Fi loss and server
 restart, remains measurable over long runs, and never resumes after a user
-Stop.
+Stop. The Phase 6 release gate passes on a physical device and in the long
+simulated soak.
 
 Detailed implementation order, exclusions, and Phase 4–7 boundaries:
 `PHASE_4_PLAN.md`.

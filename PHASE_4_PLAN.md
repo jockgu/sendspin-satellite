@@ -43,6 +43,10 @@ The only new UI is the existing status screen reflecting the service state.
 The foreground notification is functional: connection/playback status and a
 single Stop action.
 
+The existing connection screen also gains one small player identity setting.
+It is configuration for the Sendspin handshake, not a second playback state
+machine or a diagnostics surface.
+
 ## Implementation order
 
 ### Phase 4. Make the service the lifecycle boundary
@@ -65,6 +69,29 @@ already-running service.
 
 **Check:** connect, background the app, rotate it, then swipe it from
 recents. Playback/session state remains service-owned; Stop ends it cleanly.
+
+### Phase 4.1. Configure the player identity
+
+Persist a user-editable client display name alongside the manual server
+address. Add a `Player name` field to the existing connection screen rather
+than introducing a separate settings navigation layer. The default may remain
+`Sendspin Satellite`, but the user must be able to give each device a
+distinctive name such as `Kitchen Speaker` or `Office Tablet`.
+
+Pass the trimmed, validated name through `ConnectionViewModel` and
+`PlaybackService` into `SendspinSession` and the native engine before the
+`SendspinClient` is created. Use it for `SendspinClientConfig.name` only.
+Keep `product_name`, manufacturer, software version, and the stable
+device-derived client ID controlled by the application; the editable name is
+for human identification and must not replace protocol identity.
+
+Apply a changed name on the next connection. Recovery attempts and server
+reconnects reuse the current name, while a new native session picks up the
+latest persisted value.
+
+**Check:** connect two devices with distinct names and verify that both are
+unambiguous in the Sendspin server player list. Change a name, reconnect, and
+verify that the new name is advertised without changing the stable client ID.
 
 ### Phase 5. Add one explicit recovery state machine
 
