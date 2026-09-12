@@ -14,6 +14,22 @@ class OboePcmOutput final
         : public oboe::AudioStreamDataCallback,
             public oboe::AudioStreamErrorCallback {
 public:
+    struct StreamDiagnostics {
+        bool open{false};
+        int32_t state{-1};
+        int32_t sample_rate{-1};
+        int32_t channel_count{-1};
+        int32_t format{-1};
+        int32_t performance_mode{-1};
+        int32_t sharing_mode{-1};
+        int32_t device_id{-1};
+        int32_t session_id{-1};
+        int32_t frames_per_burst{-1};
+        int32_t buffer_size_frames{-1};
+        int32_t buffer_capacity_frames{-1};
+        int32_t xrun_count{-1};
+    };
+
     using PlaybackObserver = void (*)(void*, uint32_t);
     OboePcmOutput() = default;
     ~OboePcmOutput();
@@ -27,6 +43,7 @@ public:
     [[nodiscard]] uint32_t queued_frames() const;
     [[nodiscard]] uint64_t underruns() const;
     [[nodiscard]] int64_t latency_us() const;
+    [[nodiscard]] StreamDiagnostics diagnostics() const;
     [[nodiscard]] bool take_error_recovery_request();
 
     oboe::DataCallbackResult onAudioReady(

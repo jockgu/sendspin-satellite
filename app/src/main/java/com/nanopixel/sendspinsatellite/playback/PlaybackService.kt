@@ -48,6 +48,11 @@ class PlaybackService : Service() {
     private var lastLoggedFailure = -1
     private var lastLoggedHardResyncs = -1L
     private var lastLoggedReconnectCompletions = -1L
+    private val diagnosticsCollector = AudioDiagnosticsCollector(
+        clockMs = { SystemClock.elapsedRealtime() },
+    )
+    @Volatile private var platformDiagnosticsReady = false
+    @Volatile private var platformDiagnosticsDeviceId: Int? = null
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) = refreshValidatedNetwork()
 
@@ -58,6 +63,7 @@ class PlaybackService : Service() {
         override fun onLost(network: Network) = refreshValidatedNetwork()
     }
     private val focusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        diagnosticsCollector.recordEvent("focus", focusChangeName(focusChange))
         val change = when (focusChange) {
             AudioManager.AUDIOFOCUS_GAIN -> AudioFocusPolicy.Change.GAIN
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> AudioFocusPolicy.Change.LOSS_TRANSIENT
@@ -72,6 +78,7 @@ class PlaybackService : Service() {
                 publish(status.value.copy(
                     connectionState = ConnectionState.RECOVERING,
                     detail = "Audio focus is temporarily unavailable.",
+                    audioDiagnostics = diagnosticsCollector.snapshot(),
                 ))
             }
             AudioFocusPolicy.Action.RESUME -> {
@@ -79,6 +86,7 @@ class PlaybackService : Service() {
                 publish(status.value.copy(
                     connectionState = ConnectionState.RECOVERING,
                     detail = "Audio focus returned. Re-buffering playback.",
+                    audioDiagnostics = diagnosticsCollector.snapshot(),
                 ))
             }
             AudioFocusPolicy.Action.STOP -> stopPlayback()
@@ -87,11 +95,19 @@ class PlaybackService : Service() {
     }
     private val audioDeviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<AudioDeviceInfo>) {
-            if (hasOutputDevice(addedDevices)) session?.requestOutputRecovery()
+            if (hasOutputDevice(addedDevices)) {
+                diagnosticsCollector.recordEvent("route", "added=${addedDevices.size}")
+                refreshAudioPlatformDiagnostics(force = true)
+                session?.requestOutputRecovery()
+            }
         }
 
         override fun onAudioDevicesRemoved(removedDevices: Array<AudioDeviceInfo>) {
-            if (hasOutputDevice(removedDevices)) session?.requestOutputRecovery()
+            if (hasOutputDevice(removedDevices)) {
+                diagnosticsCollector.recordEvent("route", "removed=${removedDevices.size}")
+                refreshAudioPlatformDiagnostics(force = true)
+                session?.requestOutputRecovery()
+            }
         }
     }
 
@@ -104,16 +120,29 @@ class PlaybackService : Service() {
         when (intent?.action) {
             ACTION_CONNECT -> {
                 startPlaybackForeground()
+                diagnosticsCollector.reset()
+                resetPlatformDiagnostics()
+                diagnosticsCollector.recordEvent("session", "connect requested")
+                refreshAudioPlatformDiagnostics(force = true)
                 val address = intent.getStringExtra(EXTRA_SERVER_ADDRESS).orEmpty()
                 val playerName = intent.getStringExtra(EXTRA_PLAYER_NAME).orEmpty()
                 if (address.isBlank() || playerName.isBlank()) {
-                    publish(PlaybackStatus(ConnectionState.ERROR, "A server address and player name are required."))
+                    publish(PlaybackStatus(
+                        connectionState = ConnectionState.ERROR,
+                        detail = "A server address and player name are required.",
+                        audioDiagnostics = diagnosticsCollector.snapshot(),
+                    ))
                     return START_NOT_STICKY
                 }
                 focusPolicy.onConnect()
                 if (!requestAudioFocus()) {
                     focusPolicy.onFocusRequestResult(false)
-                    publish(PlaybackStatus(ConnectionState.ERROR, "Audio focus is unavailable."))
+                    diagnosticsCollector.recordEvent("focus", "request denied")
+                    publish(PlaybackStatus(
+                        connectionState = ConnectionState.ERROR,
+                        detail = "Audio focus is unavailable.",
+                        audioDiagnostics = diagnosticsCollector.snapshot(),
+                    ))
                     ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
                     stopSelf()
                     return START_NOT_STICKY
@@ -234,6 +263,10 @@ class PlaybackService : Service() {
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         if (available == validatedNetworkAvailable) return
         validatedNetworkAvailable = available
+        diagnosticsCollector.recordEvent(
+            "network",
+            if (available) "validated network available" else "validated network unavailable",
+        )
         session?.setNetworkAvailable(available)
         if (status.value.connectionState != ConnectionState.DISCONNECTED) {
             publish(status.value.copy(
@@ -261,6 +294,7 @@ class PlaybackService : Service() {
         return SendspinSession(applicationContext, playerName, object : SendspinSession.Listener {
             override fun onState(state: SendspinSession.SessionState) {
                 if (generation != sessionGeneration) return
+                diagnosticsCollector.recordEvent("session-state", state.name)
                 publish(status.value.copy(
                     connectionState = state.toConnectionState(),
                     detail = if (!validatedNetworkAvailable && state != SendspinSession.SessionState.DISCONNECTED) {
@@ -268,11 +302,19 @@ class PlaybackService : Service() {
                     } else {
                         state.detail()
                     },
+                    audioDiagnostics = diagnosticsCollector.snapshot(),
                 ))
             }
 
             override fun onDiagnostics(diagnostics: SendspinSession.Diagnostics) {
                 if (generation != sessionGeneration) return
+                val nativeSnapshot = diagnostics.nativeSnapshot
+                val audioDiagnostics = if (nativeSnapshot == null) {
+                    diagnosticsCollector.snapshot()
+                } else {
+                    refreshAudioPlatformDiagnostics(nativeSnapshot.outputDeviceId)
+                    diagnosticsCollector.updateNative(nativeSnapshot)
+                }
                 publish(status.value.copy(
                     serverName = diagnostics.serverName ?: status.value.serverName,
                     roundTripUs = diagnostics.roundTripUs.takeIf { it > 0 } ?: status.value.roundTripUs,
@@ -280,9 +322,10 @@ class PlaybackService : Service() {
                         ?: status.value.clockOffsetUs,
                     clockSamples = diagnostics.samples.takeIf { it > 0 } ?: status.value.clockSamples,
                     detail = diagnostics.message ?: status.value.detail,
-                    nativeDiagnostics = diagnostics.nativeSnapshot ?: status.value.nativeDiagnostics,
+                    nativeDiagnostics = nativeSnapshot ?: status.value.nativeDiagnostics,
+                    audioDiagnostics = audioDiagnostics,
                 ))
-                diagnostics.nativeSnapshot?.let(::logDiagnostics)
+                nativeSnapshot?.let(::logDiagnostics)
             }
         }).also { session = it }
     }
@@ -302,10 +345,50 @@ class PlaybackService : Service() {
             "state=${snapshot.state} generation=${snapshot.generation} " +
                 "buffer=${snapshot.queuedFrames}/${snapshot.fifoCapacityFrames} " +
                 "underruns=${snapshot.underruns} outputRestarts=${snapshot.outputRestarts} " +
+                "xrun=${snapshot.outputXruns} output=${snapshot.outputSampleRate}Hz/" +
+                "${snapshot.outputChannelCount}ch burst=${snapshot.outputFramesPerBurst} " +
+                "bufferFrames=${snapshot.outputBufferSizeFrames}/${snapshot.outputBufferCapacityFrames} " +
+                "latencyUs=${snapshot.outputLatencyUs} " +
                 "hardResyncs=${snapshot.hardResyncs} reconnects=" +
                 "${snapshot.reconnectCompletions}/${snapshot.reconnectAttempts} " +
                 "lastFailure=${snapshot.lastFailure}",
         )
+    }
+
+    private fun refreshAudioPlatformDiagnostics(
+        nativeOutputDeviceId: Int? = null,
+        force: Boolean = false,
+    ) {
+        val requestedDeviceId = nativeOutputDeviceId?.takeIf { it >= 0 }
+        mainHandler.post {
+            if (!force && platformDiagnosticsReady && requestedDeviceId == platformDiagnosticsDeviceId) return@post
+            runCatching {
+                diagnosticsCollector.updatePlatform(
+                    AudioPlatformDiagnosticsReader.read(this, audioManager, requestedDeviceId),
+                )
+            }.onSuccess {
+                platformDiagnosticsDeviceId = requestedDeviceId
+                platformDiagnosticsReady = true
+                if (status.value.connectionState != ConnectionState.DISCONNECTED) {
+                    publish(status.value.copy(audioDiagnostics = diagnosticsCollector.snapshot()))
+                }
+            }.onFailure {
+                diagnosticsCollector.recordEvent("diagnostics", "platform snapshot unavailable")
+            }
+        }
+    }
+
+    private fun resetPlatformDiagnostics() {
+        platformDiagnosticsDeviceId = null
+        platformDiagnosticsReady = false
+    }
+
+    private fun focusChangeName(change: Int): String = when (change) {
+        AudioManager.AUDIOFOCUS_GAIN -> "gain"
+        AudioManager.AUDIOFOCUS_LOSS -> "loss"
+        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "loss transient"
+        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> "loss transient can duck"
+        else -> "change=$change"
     }
 
     private fun shutdownSession() {

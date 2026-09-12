@@ -124,15 +124,30 @@ void NativePlaybackEngine::publish_state() {
     std::lock_guard lock(diagnostics_mutex_);
     diagnostics_.state = next_state;
     diagnostics_.generation = recovery_state_.recovery_generation();
-    diagnostics_.queued_frames = output_.queued_frames();
-    diagnostics_.underruns = output_.underruns();
-    diagnostics_.output_latency_us = output_.latency_us();
+    refresh_output_diagnostics_locked();
 }
 void NativePlaybackEngine::refresh_output_diagnostics() {
     std::lock_guard lock(diagnostics_mutex_);
+    refresh_output_diagnostics_locked();
+}
+void NativePlaybackEngine::refresh_output_diagnostics_locked() {
     diagnostics_.queued_frames = output_.queued_frames();
     diagnostics_.underruns = output_.underruns();
     diagnostics_.output_latency_us = output_.latency_us();
+    const auto output_diagnostics = output_.diagnostics();
+    diagnostics_.output_stream_open = output_diagnostics.open;
+    diagnostics_.output_stream_state = output_diagnostics.state;
+    diagnostics_.output_sample_rate = output_diagnostics.sample_rate;
+    diagnostics_.output_channel_count = output_diagnostics.channel_count;
+    diagnostics_.output_format = output_diagnostics.format;
+    diagnostics_.output_performance_mode = output_diagnostics.performance_mode;
+    diagnostics_.output_sharing_mode = output_diagnostics.sharing_mode;
+    diagnostics_.output_device_id = output_diagnostics.device_id;
+    diagnostics_.output_session_id = output_diagnostics.session_id;
+    diagnostics_.output_frames_per_burst = output_diagnostics.frames_per_burst;
+    diagnostics_.output_buffer_size_frames = output_diagnostics.buffer_size_frames;
+    diagnostics_.output_buffer_capacity_frames = output_diagnostics.buffer_capacity_frames;
+    diagnostics_.output_xrun_count = output_diagnostics.xrun_count;
 }
 void NativePlaybackEngine::record_failure(const Failure failure) {
     std::lock_guard lock(diagnostics_mutex_);

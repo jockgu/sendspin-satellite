@@ -51,6 +51,19 @@ public:
         uint32_t clock_samples{0};
         bool clock_converged{false};
         Failure last_failure{Failure::None};
+        bool output_stream_open{false};
+        int32_t output_stream_state{-1};
+        int32_t output_sample_rate{-1};
+        int32_t output_channel_count{-1};
+        int32_t output_format{-1};
+        int32_t output_performance_mode{-1};
+        int32_t output_sharing_mode{-1};
+        int32_t output_device_id{-1};
+        int32_t output_session_id{-1};
+        int32_t output_frames_per_burst{-1};
+        int32_t output_buffer_size_frames{-1};
+        int32_t output_buffer_capacity_frames{-1};
+        int32_t output_xrun_count{-1};
     };
 
     bool connect(std::string url);
@@ -71,6 +84,7 @@ private:
     static void on_stream_started(void* context);
     void publish_state();
     void refresh_output_diagnostics();
+    void refresh_output_diagnostics_locked();
     void record_failure(Failure failure);
     void record_hard_resync();
     void record_output_restart();

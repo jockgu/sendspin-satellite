@@ -71,6 +71,29 @@ int64_t OboePcmOutput::latency_us() const {
     return static_cast<int64_t>(result.value() * 1'000.0);
 }
 
+OboePcmOutput::StreamDiagnostics OboePcmOutput::diagnostics() const {
+    StreamDiagnostics result;
+    if (!stream_) return result;
+
+    result.open = true;
+    result.state = static_cast<int32_t>(stream_->getState());
+    result.sample_rate = stream_->getSampleRate();
+    result.channel_count = stream_->getChannelCount();
+    result.format = static_cast<int32_t>(stream_->getFormat());
+    result.performance_mode = static_cast<int32_t>(stream_->getPerformanceMode());
+    result.sharing_mode = static_cast<int32_t>(stream_->getSharingMode());
+    result.device_id = stream_->getDeviceId();
+    result.session_id = static_cast<int32_t>(stream_->getSessionId());
+    result.frames_per_burst = stream_->getFramesPerBurst();
+    result.buffer_size_frames = stream_->getBufferSizeInFrames();
+    result.buffer_capacity_frames = stream_->getBufferCapacityInFrames();
+    const auto xruns = stream_->getXRunCount();
+    if (static_cast<oboe::Result>(xruns) == oboe::Result::OK) {
+        result.xrun_count = xruns.value();
+    }
+    return result;
+}
+
 bool OboePcmOutput::take_error_recovery_request() {
     return error_recovery_requested_.exchange(false, std::memory_order_acq_rel);
 }

@@ -37,6 +37,19 @@ class NativePlaybackEngine(
             clockSamples = values[14],
             clockConverged = values[15] != 0L,
             lastFailure = values[16].toInt(),
+            outputStreamOpen = values[17] != 0L,
+            outputStreamState = values[18].toInt(),
+            outputSampleRate = values[19].toInt(),
+            outputChannelCount = values[20].toInt(),
+            outputFormat = values[21].toInt(),
+            outputPerformanceMode = values[22].toInt(),
+            outputSharingMode = values[23].toInt(),
+            outputDeviceId = values[24].toInt(),
+            outputSessionId = values[25].toInt(),
+            outputFramesPerBurst = values[26].toInt(),
+            outputBufferSizeFrames = values[27].toInt(),
+            outputBufferCapacityFrames = values[28].toInt(),
+            outputXruns = values[29].toInt(),
         )
     }
     fun requestOutputRecovery() {
@@ -79,6 +92,19 @@ class NativePlaybackEngine(
         val clockSamples: Long,
         val clockConverged: Boolean,
         val lastFailure: Int,
+        val outputStreamOpen: Boolean,
+        val outputStreamState: Int,
+        val outputSampleRate: Int,
+        val outputChannelCount: Int,
+        val outputFormat: Int,
+        val outputPerformanceMode: Int,
+        val outputSharingMode: Int,
+        val outputDeviceId: Int,
+        val outputSessionId: Int,
+        val outputFramesPerBurst: Int,
+        val outputBufferSizeFrames: Int,
+        val outputBufferCapacityFrames: Int,
+        val outputXruns: Int,
     )
 
     private companion object {
@@ -100,6 +126,6 @@ class NativePlaybackEngine(
         @JvmStatic private external fun nativeState(handle: Long): Int
 
         private const val RECOVERY_CAUSE_ROUTE_CHANGE = 1
-        private const val DIAGNOSTICS_SIZE = 17
+        private const val DIAGNOSTICS_SIZE = 30
     }
 }

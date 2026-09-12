@@ -163,6 +163,19 @@ Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeDiagnos
         static_cast<jlong>(snapshot.clock_samples),
         snapshot.clock_converged ? 1 : 0,
         static_cast<jlong>(snapshot.last_failure),
+        snapshot.output_stream_open ? 1 : 0,
+        static_cast<jlong>(snapshot.output_stream_state),
+        static_cast<jlong>(snapshot.output_sample_rate),
+        static_cast<jlong>(snapshot.output_channel_count),
+        static_cast<jlong>(snapshot.output_format),
+        static_cast<jlong>(snapshot.output_performance_mode),
+        static_cast<jlong>(snapshot.output_sharing_mode),
+        static_cast<jlong>(snapshot.output_device_id),
+        static_cast<jlong>(snapshot.output_session_id),
+        static_cast<jlong>(snapshot.output_frames_per_burst),
+        static_cast<jlong>(snapshot.output_buffer_size_frames),
+        static_cast<jlong>(snapshot.output_buffer_capacity_frames),
+        static_cast<jlong>(snapshot.output_xrun_count),
     };
     auto result = env->NewLongArray(static_cast<jsize>(std::size(values)));
     if (result == nullptr) return nullptr;

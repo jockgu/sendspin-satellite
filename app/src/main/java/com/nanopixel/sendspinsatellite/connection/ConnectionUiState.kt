@@ -1,5 +1,7 @@
 package com.nanopixel.sendspinsatellite.connection
 
+import com.nanopixel.sendspinsatellite.playback.AlphaAudioDiagnostics
+
 /** The user-visible lifecycle of a Sendspin session. */
 enum class ConnectionState(val label: String) {
     DISCONNECTED("Disconnected"),
@@ -21,4 +23,5 @@ data class ConnectionUiState(
     val roundTripUs: Long? = null,
     val clockOffsetUs: Long? = null,
     val clockSamples: Int = 0,
+    val audioDiagnostics: AlphaAudioDiagnostics? = null,
 )
