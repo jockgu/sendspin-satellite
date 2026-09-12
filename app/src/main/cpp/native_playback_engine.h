@@ -90,6 +90,7 @@ private:
     void record_output_restart();
     void record_reconnect_attempt();
     void record_reconnect_completion();
+    void drain_playback_feedback();
     void run();
 
     OboePcmOutput output_;
@@ -110,6 +111,7 @@ private:
     std::atomic<bool> focus_suspended_{false};
     std::atomic<bool> buffering_requested_{false};
     std::atomic<bool> playing_requested_{false};
+    std::atomic<uint64_t> pending_audio_played_frames_{0};
     std::thread loop_thread_;
 };
 

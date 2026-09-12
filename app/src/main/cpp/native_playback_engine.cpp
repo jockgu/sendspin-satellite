@@ -1,5 +1,6 @@
 #include "native_playback_engine.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <limits>
@@ -111,8 +112,8 @@ void NativePlaybackEngine::on_time_sync_updated(const float error) {
 }
 void NativePlaybackEngine::on_frames_played(void* context, uint32_t frames) {
     auto* engine = static_cast<NativePlaybackEngine*>(context);
+    engine->pending_audio_played_frames_.fetch_add(frames, std::memory_order_release);
     engine->playing_requested_.store(true, std::memory_order_release);
-    engine->player_.notify_audio_played(frames, monotonic_us());
 }
 void NativePlaybackEngine::on_stream_started(void* context) {
     static_cast<NativePlaybackEngine*>(context)->buffering_requested_.store(
@@ -168,6 +169,21 @@ void NativePlaybackEngine::record_reconnect_attempt() {
 void NativePlaybackEngine::record_reconnect_completion() {
     std::lock_guard lock(diagnostics_mutex_);
     ++diagnostics_.reconnect_completions;
+}
+void NativePlaybackEngine::drain_playback_feedback() {
+    const auto frames = pending_audio_played_frames_.exchange(0, std::memory_order_acq_rel);
+    if (frames == 0) return;
+
+    const auto now_us = monotonic_us();
+    const auto latency_us = output_.latency_us();
+    const auto finish_timestamp = now_us + std::max<int64_t>(0, latency_us);
+    uint64_t remaining = frames;
+    while (remaining != 0) {
+        const auto batch = static_cast<uint32_t>(std::min<uint64_t>(
+            remaining, std::numeric_limits<uint32_t>::max()));
+        player_.notify_audio_played(batch, finish_timestamp);
+        remaining -= batch;
+    }
 }
 void NativePlaybackEngine::run() {
     if (!client_.start_server()) {
@@ -311,6 +327,7 @@ void NativePlaybackEngine::run() {
             }
         }
         client_.loop();
+        drain_playback_feedback();
         if (buffering_requested_.exchange(false, std::memory_order_acq_rel)) {
             recovery_state_.buffering();
             publish_state();

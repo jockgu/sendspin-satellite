@@ -54,6 +54,7 @@ If you test against older Sendspin/aiosendspin servers, availability and playbac
 | Music Assistant | aiosendspin | Tested on | Connect | Available | Playback |
 | --- | --- | --- | --- | --- | --- |
 | 2.10.2 | 9.1.1 | Android Emulator | Yes | Yes | Partial (source-dependent; physical recovery pending) |
+| 2.10.2 | 9.1.1 | Amazon Echo Show 5 (2nd gen) | Yes | Yes | Yes |
 
 Notes:
 - This matrix reflects known-tested combinations only.
