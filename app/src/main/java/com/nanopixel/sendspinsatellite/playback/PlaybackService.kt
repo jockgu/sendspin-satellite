@@ -589,7 +589,7 @@ class PlaybackService : Service() {
     }
 
     private fun notification() = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-        .setSmallIcon(R.mipmap.ic_launcher)
+        .setSmallIcon(R.drawable.ic_stat_sendspin)
         .setContentTitle(getString(R.string.app_name))
         .setContentText(status.value.connectionState.label)
         .setContentIntent(PendingIntent.getActivity(
