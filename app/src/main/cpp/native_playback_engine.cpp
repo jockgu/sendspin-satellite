@@ -20,6 +20,10 @@ PlayerRoleConfig player_config() {
     PlayerRoleConfig config;
     config.audio_formats = {{SendspinCodecFormat::PCM, PcmRenderFifo::kChannels,
                              PcmRenderFifo::kSampleRate, 16}};
+    // Internet radio is inherently bursty. Keep one second queued at the server so brief
+    // delivery gaps cannot drain the local PCM timeline; retain a modest scheduling lead.
+    config.required_lead_time_ms = 250;
+    config.min_buffer_ms = 1000;
     return config;
 }
 int64_t monotonic_us() {

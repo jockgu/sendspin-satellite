@@ -164,16 +164,15 @@ fun nativeFailureName(value: Int): String = when (value) {
 
 fun oboeFormatName(value: Int): String = when (value) {
     0 -> "Unspecified"
-    1 -> "I8"
-    2 -> "I16"
+    1 -> "I16"
+    2 -> "Float"
     3 -> "I24"
     4 -> "I32"
-    5 -> "Float"
-    6 -> "IEC61937"
-    7 -> "MP3"
-    8 -> "AAC"
-    9 -> "Opus"
-    10 -> "Vorbis"
+    5 -> "IEC61937"
+    6 -> "MP3"
+    7 -> "AAC"
+    8 -> "Opus"
+    9 -> "Vorbis"
     else -> "Code $value"
 }
 
