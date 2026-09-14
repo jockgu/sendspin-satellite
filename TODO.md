@@ -163,14 +163,14 @@ behaviour measurable.
   repeated recovery, no stale generations rendered, and eventual convergence.
 - [x] Add the shorter soak version to CI and run the long version manually
   before release.
-- [ ] Validate on a physical device with the screen off: Wi-Fi loss, server
+- [x] Validate on a physical device with the screen off: Wi-Fi loss, server
   restart, and at least one physical route change recover with diagnostics.
 
 The native snapshot now reports output latency when Oboe provides it, clock
 error, convergence, samples, recovery counters, and the latest failure. The
 pinned public `sendspin-cpp` API does not expose true RTT, clock offset, or
 clock drift accessors, so those native snapshot fields remain `-1` until an
-upstream API is available. The physical-device release gate is still open.
+upstream API is available. The physical-device release gate is complete.
 
 **Acceptance:** PCM playback recovers predictably from Wi-Fi loss and server
 restart, remains measurable over long runs, and never resumes after a user
@@ -185,21 +185,25 @@ Detailed implementation order, exclusions, and Phase 4–7 boundaries:
 Goal: make the normal one-server Home Assistant installation work without any
 server setup, without weakening the proven manual connection and recovery path.
 
-- [ ] Browse and resolve `_sendspin._tcp.` using Android's native `NsdManager`
+- [x] Browse and resolve `_sendspin-server._tcp` using Android's native `NsdManager`
   only while the service is active on a validated local network.
-- [ ] Hand the resolved `ws://host:port/sendspin` URL to the existing Phase 6
+- [x] Hand the resolved `ws://host:port/sendspin` URL to the existing Phase 6
   service; do not create a second connection path.
-- [ ] Connect automatically when exactly one compatible server is found.
-- [ ] Show a simple selector only when multiple compatible servers are found;
+- [x] Connect automatically when exactly one compatible server is found.
+- [x] Show a simple selector only when multiple compatible servers are found;
   do not build a server browser, catalogue, or management UI.
-- [ ] Keep manual configuration as the fallback when discovery finds nothing or
+- [x] Keep manual configuration as the fallback when discovery finds nothing or
   cannot be used on the local network.
-- [ ] Discard discovery state on network change, service stop, or a manual
+- [x] Discard discovery state on network change, service stop, or a manual
   connection, and validate every candidate through the normal handshake.
 
 **Acceptance:** one compatible local Home Assistant Sendspin server is found
 and played automatically through the resilient connection path. A selector is
 shown only when multiple servers are found, and manual setup remains available.
+
+Phase 7 acceptance is complete: server autodiscovery and playback were
+validated on an Amazon Echo device. This concludes the app's phased
+development plan.
 
 ## Later codec support
 

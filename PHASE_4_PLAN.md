@@ -222,15 +222,15 @@ restart and at least one physical route change, and provide diagnostics for
 each recovery. A long simulated soak must pass without stale PCM, queue
 growth, or unrecovered state.
 
-Current status: the host recovery and soak work is complete; physical-device
-screen-off, network, server-restart, and route-change validation remains.
+Current status: the host recovery and soak work is complete, and physical-device
+screen-off, network, server-restart, and route-change validation is complete.
 
 ## Phase 7 — server autodiscovery
 
 Phase 7 follows only after the Phase 6 release gate. It targets the normal
 installation: one Home Assistant
 Sendspin server on the local network. Android's native `NsdManager` browses
-the Sendspin mDNS service type `_sendspin._tcp.`, resolves it to a host and
+the Sendspin mDNS service type `_sendspin-server._tcp`, resolves it to a host and
 port, constructs the normal Sendspin URL (`ws://host:port/sendspin`), and
 hands it to the already-proven Phase 6 service/recovery path.
 
@@ -258,3 +258,6 @@ cross-network discovery, and custom native mDNS code/dependencies. Its
 acceptance is that a single compatible Home Assistant Sendspin server is found
 and connected automatically through the same resilient path as a manually
 configured server. A selector appears only when multiple servers are found.
+
+Current status: implementation and physical validation are complete. Server
+autodiscovery and playback were verified on an Amazon Echo device.

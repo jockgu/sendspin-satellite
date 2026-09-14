@@ -17,12 +17,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +45,8 @@ fun SendspinSatelliteApp(
     onServerAddressChanged: (String) -> Unit,
     onPlayerNameChanged: (String) -> Unit,
     onConnect: () -> Unit,
+    onDiscover: () -> Unit,
+    onSelectDiscoveredServer: (String) -> Unit,
     onDisconnect: () -> Unit,
 ) {
     var showDiagnostics by rememberSaveable { mutableStateOf(false) }
@@ -120,16 +125,52 @@ fun SendspinSatelliteApp(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
                 Spacer(Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = onDiscover,
+                    enabled = state.connectionState == ConnectionState.DISCONNECTED ||
+                        state.connectionState == ConnectionState.ERROR,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Find local server")
+                }
+                Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = if (state.connectionState == ConnectionState.DISCONNECTED || state.connectionState == ConnectionState.ERROR) onConnect else onDisconnect,
                     enabled = state.serverAddress.isNotBlank() || state.connectionState != ConnectionState.DISCONNECTED,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (state.connectionState == ConnectionState.DISCONNECTED || state.connectionState == ConnectionState.ERROR) "Connect" else "Disconnect")
+                    Text(
+                        if (state.connectionState == ConnectionState.DISCONNECTED || state.connectionState == ConnectionState.ERROR) {
+                            "Connect"
+                        } else if (state.connectionState == ConnectionState.DISCOVERING) {
+                            "Cancel"
+                        } else {
+                            "Disconnect"
+                        },
+                    )
                 }
             }
         }
         }
+    }
+    if (state.discoveredServers.size > 1) {
+        AlertDialog(
+            onDismissRequest = onDisconnect,
+            title = { Text("Choose a Sendspin server") },
+            text = {
+                Column {
+                    state.discoveredServers.forEach { server ->
+                        TextButton(
+                            onClick = { onSelectDiscoveredServer(server.id) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("${server.name}\n${server.url}")
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+        )
     }
 }
 
@@ -144,6 +185,8 @@ private fun DisconnectedPreview() {
         onServerAddressChanged = {},
             onPlayerNameChanged = {},
         onConnect = {},
+        onDiscover = {},
+        onSelectDiscoveredServer = {},
         onDisconnect = {},
     )
 }

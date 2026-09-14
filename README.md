@@ -4,9 +4,10 @@ Alpha Android Sendspin client focused on reliability-first playback.
 
 ## Current status (alpha)
 
-The project is implementing **Phase 6** of the implementation plan: network
-recovery, fixed diagnostics, and soak hardening. The host recovery tests and
-virtual soak are passing; the physical-device release gate remains open.
+The project has completed **Phase 7** of the implementation plan: Home
+Assistant server autodiscovery through Android NSD. Phase 6 network recovery,
+diagnostics, soak hardening, and physical-device validation are complete. This
+completes the planned phased development work for the alpha app.
 
 What is currently working:
 - Android app can connect to a Sendspin server and complete handshake/time sync.
@@ -20,11 +21,8 @@ What is currently working:
   short soak is configured for CI.
 
 Known alpha limitations:
-- Playback reliability and format behavior still vary by source type while
-  physical Phase 6 testing continues.
+- Playback reliability and format behavior still vary by source type.
 - Android emulator audio quality/timing is not representative of real hardware.
-- The physical screen-off, Wi-Fi loss, server restart, and route-change checks
-  are not yet complete.
 - The pinned public `sendspin-cpp` API does not expose true RTT, clock offset,
   or clock drift accessors; those native snapshot fields remain `-1`.
 

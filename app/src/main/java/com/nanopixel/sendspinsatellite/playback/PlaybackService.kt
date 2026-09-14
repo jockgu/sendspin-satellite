@@ -43,7 +43,14 @@ class PlaybackService : Service() {
     private var focusRequest: AudioFocusRequest? = null
     private var deviceCallbackRegistered = false
     private var networkCallbackRegistered = false
+    // The first network callback is asynchronous; allow an explicitly entered
+    // URL to make its initial attempt while Android reports the current state.
+    // Discovery still requires a confirmed Network object below.
     private var validatedNetworkAvailable = true
+    private var validatedNetwork: Network? = null
+    private var serverDiscovery: SendspinServerDiscovery? = null
+    private var discoveryPlayerName: String? = null
+    private var discoverySelectionTimeout: Runnable? = null
     private var lastDiagnosticsLogAt = 0L
     private var lastLoggedFailure = -1
     private var lastLoggedHardResyncs = -1L
@@ -118,54 +125,200 @@ class PlaybackService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_CONNECT -> {
-                startPlaybackForeground()
-                diagnosticsCollector.reset()
-                resetPlatformDiagnostics()
-                diagnosticsCollector.recordEvent("session", "connect requested")
-                refreshAudioPlatformDiagnostics(force = true)
-                val address = intent.getStringExtra(EXTRA_SERVER_ADDRESS).orEmpty()
-                val playerName = intent.getStringExtra(EXTRA_PLAYER_NAME).orEmpty()
-                if (address.isBlank() || playerName.isBlank()) {
-                    publish(PlaybackStatus(
-                        connectionState = ConnectionState.ERROR,
-                        detail = "A server address and player name are required.",
-                        audioDiagnostics = diagnosticsCollector.snapshot(),
-                    ))
-                    return START_NOT_STICKY
-                }
-                focusPolicy.onConnect()
-                if (!requestAudioFocus()) {
-                    focusPolicy.onFocusRequestResult(false)
-                    diagnosticsCollector.recordEvent("focus", "request denied")
-                    publish(PlaybackStatus(
-                        connectionState = ConnectionState.ERROR,
-                        detail = "Audio focus is unavailable.",
-                        audioDiagnostics = diagnosticsCollector.snapshot(),
-                    ))
-                    ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
-                    stopSelf()
-                    return START_NOT_STICKY
-                }
-                focusPolicy.onFocusRequestResult(true)
-                val activeSession = replaceSession(playerName)
-                activeSession.setNetworkAvailable(validatedNetworkAvailable)
-                registerAudioDeviceCallback()
-                registerNetworkCallback()
-                publish(PlaybackStatus(ConnectionState.CONNECTING, "Opening a Sendspin connection."))
-                activeSession.connect(address)
-            }
+            ACTION_CONNECT -> connectToAddress(
+                intent.getStringExtra(EXTRA_SERVER_ADDRESS).orEmpty(),
+                intent.getStringExtra(EXTRA_PLAYER_NAME).orEmpty(),
+            )
+            ACTION_DISCOVER -> discoverServers(intent.getStringExtra(EXTRA_PLAYER_NAME).orEmpty())
+            ACTION_SELECT_DISCOVERED -> selectDiscoveredServer(intent.getStringExtra(EXTRA_SERVER_ID).orEmpty())
             ACTION_STOP -> stopPlayback()
         }
         return START_NOT_STICKY
     }
 
+    private fun connectToAddress(
+        address: String,
+        playerName: String,
+        discoveredServer: DiscoveredServer? = null,
+    ) {
+        stopDiscoveryResources(clearPlayerName = true)
+        startPlaybackForeground()
+        diagnosticsCollector.reset()
+        resetPlatformDiagnostics()
+        val source = if (discoveredServer == null) "manual" else "discovery"
+        diagnosticsCollector.recordEvent("session", "connect target=$address source=$source")
+        discoveredServer?.let { server ->
+            diagnosticsCollector.recordEvent(
+                "discovery-target",
+                "service=${server.name} addresses=${server.addresses} selected=${server.url}",
+            )
+        }
+        Log.i(TAG, "connect target=$address source=$source")
+        refreshAudioPlatformDiagnostics(force = true)
+        if (address.isBlank() || playerName.isBlank()) {
+            publish(PlaybackStatus(
+                connectionState = ConnectionState.ERROR,
+                detail = "A server address and player name are required.",
+                audioDiagnostics = diagnosticsCollector.snapshot(),
+            ))
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
+        focusPolicy.onConnect()
+        if (!requestAudioFocus()) {
+            focusPolicy.onFocusRequestResult(false)
+            diagnosticsCollector.recordEvent("focus", "request denied")
+            publish(PlaybackStatus(
+                connectionState = ConnectionState.ERROR,
+                detail = "Audio focus is unavailable.",
+                audioDiagnostics = diagnosticsCollector.snapshot(),
+            ))
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
+        focusPolicy.onFocusRequestResult(true)
+        val activeSession = replaceSession(playerName)
+        activeSession.setNetworkAvailable(validatedNetworkAvailable)
+        registerAudioDeviceCallback()
+        registerNetworkCallback()
+        publish(PlaybackStatus(
+            connectionState = ConnectionState.CONNECTING,
+            detail = "Opening a Sendspin connection.",
+            serverName = discoveredServer?.let { "${it.name} (${it.url})" },
+            audioDiagnostics = diagnosticsCollector.snapshot(),
+        ))
+        activeSession.connect(address)
+    }
+
+    private fun discoverServers(playerName: String) {
+        if (playerName.isBlank()) {
+            publish(PlaybackStatus(
+                connectionState = ConnectionState.ERROR,
+                detail = "A player name is required to discover a server.",
+            ))
+            return
+        }
+        focusPolicy.onStop()
+        unregisterAudioDeviceCallback()
+        shutdownSession()
+        abandonAudioFocus()
+        stopDiscoveryResources(clearPlayerName = true)
+        startPlaybackForeground()
+        diagnosticsCollector.reset()
+        resetPlatformDiagnostics()
+        diagnosticsCollector.recordEvent("discovery", "requested")
+        discoveryPlayerName = playerName
+        registerNetworkCallback()
+        publish(PlaybackStatus(
+            connectionState = ConnectionState.DISCOVERING,
+            detail = "Looking for a local Sendspin server.",
+            audioDiagnostics = diagnosticsCollector.snapshot(),
+        ))
+        applyValidatedNetwork()
+    }
+
+    private fun startDiscoveryIfPossible() {
+        if (serverDiscovery != null || discoveryPlayerName == null) return
+        val network = validatedNetwork
+        if (!validatedNetworkAvailable || network == null || !isLocalNetwork(network)) {
+            publish(status.value.copy(
+                connectionState = ConnectionState.DISCOVERING,
+                detail = "Waiting for a validated local network.",
+                discoveredServers = emptyList(),
+            ))
+            return
+        }
+        val discovery = SendspinServerDiscovery(
+            applicationContext,
+            mainHandler,
+            object : SendspinServerDiscovery.Listener {
+                override fun onStarted() {
+                    diagnosticsCollector.recordEvent("discovery", "started")
+                    publish(status.value.copy(detail = "Looking for a local Sendspin server."))
+                }
+
+                override fun onFinished(servers: List<DiscoveredServer>) {
+                    if (discoveryPlayerName == null || status.value.connectionState != ConnectionState.DISCOVERING) return
+                    serverDiscovery = null
+                    diagnosticsCollector.recordEvent("discovery", "resolved=${servers.size}")
+                    handleDiscoveryResult(servers)
+                }
+
+                override fun onFailed(detail: String) {
+                    if (discoveryPlayerName == null || status.value.connectionState != ConnectionState.DISCOVERING) return
+                    serverDiscovery = null
+                    diagnosticsCollector.recordEvent("discovery", "failed")
+                    finishDiscovery(detail)
+                }
+            },
+        )
+        serverDiscovery = discovery
+        discovery.start(network)
+    }
+
+    private fun handleDiscoveryResult(servers: List<DiscoveredServer>) {
+        when (val decision = decideServerDiscovery(servers)) {
+            ServerDiscoveryDecision.None -> finishDiscovery(
+                "No local Sendspin server was found. Enter an address or try again.",
+            )
+            is ServerDiscoveryDecision.AutoConnect -> {
+                val playerName = discoveryPlayerName ?: return
+                connectToAddress(decision.server.url, playerName, decision.server)
+            }
+            is ServerDiscoveryDecision.Select -> {
+                discoverySelectionTimeout?.let(mainHandler::removeCallbacks)
+                val timeout = Runnable {
+                    if (status.value.connectionState == ConnectionState.DISCOVERING) {
+                        finishDiscovery("Server selection timed out. Enter an address or try again.")
+                    }
+                }
+                discoverySelectionTimeout = timeout
+                publish(status.value.copy(
+                    detail = "Select a discovered Sendspin server.",
+                    discoveredServers = decision.servers,
+                ))
+                mainHandler.postDelayed(timeout, DISCOVERY_SELECTION_TIMEOUT_MS)
+            }
+        }
+    }
+
+    private fun selectDiscoveredServer(serverId: String) {
+        if (status.value.connectionState != ConnectionState.DISCOVERING) return
+        val server = status.value.discoveredServers.firstOrNull { it.id == serverId } ?: return
+        val playerName = discoveryPlayerName ?: return
+        connectToAddress(server.url, playerName, server)
+    }
+
+    private fun finishDiscovery(detail: String) {
+        stopDiscoveryResources(clearPlayerName = true)
+        unregisterNetworkCallback()
+        publish(PlaybackStatus(
+            connectionState = ConnectionState.DISCONNECTED,
+            detail = detail,
+            audioDiagnostics = diagnosticsCollector.snapshot(),
+        ))
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    private fun stopDiscoveryResources(clearPlayerName: Boolean) {
+        serverDiscovery?.stop()
+        serverDiscovery = null
+        discoverySelectionTimeout?.let(mainHandler::removeCallbacks)
+        discoverySelectionTimeout = null
+        if (clearPlayerName) discoveryPlayerName = null
+    }
+
     override fun onDestroy() {
+        val hadActiveResources = session != null || serverDiscovery != null || networkCallbackRegistered
+        stopDiscoveryResources(clearPlayerName = true)
         unregisterAudioDeviceCallback()
         unregisterNetworkCallback()
         shutdownSession()
         abandonAudioFocus()
-        publish(PlaybackStatus())
+        if (hadActiveResources) publish(PlaybackStatus())
         super.onDestroy()
     }
 
@@ -182,6 +335,7 @@ class PlaybackService : Service() {
 
     private fun stopPlayback() {
         focusPolicy.onStop()
+        stopDiscoveryResources(clearPlayerName = true)
         unregisterAudioDeviceCallback()
         unregisterNetworkCallback()
         shutdownSession()
@@ -257,17 +411,41 @@ class PlaybackService : Service() {
     }
 
     private fun applyValidatedNetwork() {
-        val network = connectivityManager.activeNetwork
+        val network: Network? = connectivityManager.activeNetwork
         val capabilities = network?.let(connectivityManager::getNetworkCapabilities)
         val available = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true &&
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-        if (available == validatedNetworkAvailable) return
+        val changed = available != validatedNetworkAvailable ||
+            (available && network != validatedNetwork)
         validatedNetworkAvailable = available
+        validatedNetwork = network.takeIf { available }
+        if (!changed) {
+            if (status.value.connectionState == ConnectionState.DISCOVERING) startDiscoveryIfPossible()
+            return
+        }
         diagnosticsCollector.recordEvent(
             "network",
             if (available) "validated network available" else "validated network unavailable",
         )
         session?.setNetworkAvailable(available)
+        if (status.value.connectionState == ConnectionState.DISCOVERING) {
+            serverDiscovery?.stop()
+            serverDiscovery = null
+            discoverySelectionTimeout?.let(mainHandler::removeCallbacks)
+            discoverySelectionTimeout = null
+            val local = available && isLocalNetwork(network)
+            publish(status.value.copy(
+                connectionState = ConnectionState.DISCOVERING,
+                detail = if (local) {
+                    "Looking for a local Sendspin server."
+                } else {
+                    "Waiting for a validated local network."
+                },
+                discoveredServers = emptyList(),
+            ))
+            if (local) startDiscoveryIfPossible()
+            return
+        }
         if (status.value.connectionState != ConnectionState.DISCONNECTED) {
             publish(status.value.copy(
                 connectionState = ConnectionState.RECOVERING,
@@ -278,6 +456,12 @@ class PlaybackService : Service() {
                 },
             ))
         }
+    }
+
+    private fun isLocalNetwork(network: Network?): Boolean {
+        val capabilities = network?.let(connectivityManager::getNetworkCapabilities) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
     }
 
     private fun hasOutputDevice(devices: Array<AudioDeviceInfo>): Boolean {
@@ -444,13 +628,17 @@ class PlaybackService : Service() {
 
     companion object {
         const val ACTION_CONNECT = "com.nanopixel.sendspinsatellite.action.CONNECT"
+        const val ACTION_DISCOVER = "com.nanopixel.sendspinsatellite.action.DISCOVER"
+        const val ACTION_SELECT_DISCOVERED = "com.nanopixel.sendspinsatellite.action.SELECT_DISCOVERED"
         const val ACTION_STOP = "com.nanopixel.sendspinsatellite.action.STOP"
         const val EXTRA_SERVER_ADDRESS = "server_address"
         const val EXTRA_PLAYER_NAME = "player_name"
+        const val EXTRA_SERVER_ID = "server_id"
         const val NOTIFICATION_CHANNEL_ID = "playback"
         const val NOTIFICATION_ID = 1
         private const val TAG = "PlaybackService"
         private const val DIAGNOSTICS_LOG_INTERVAL_MS = 30_000L
+        private const val DISCOVERY_SELECTION_TIMEOUT_MS = 30_000L
 
         val status = MutableStateFlow(PlaybackStatus())
 
@@ -481,6 +669,23 @@ class PlaybackService : Service() {
                     .setAction(ACTION_CONNECT)
                     .putExtra(EXTRA_SERVER_ADDRESS, address)
                     .putExtra(EXTRA_PLAYER_NAME, playerName),
+            )
+        }
+
+        internal fun discover(context: Context, playerName: String) {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, PlaybackService::class.java)
+                    .setAction(ACTION_DISCOVER)
+                    .putExtra(EXTRA_PLAYER_NAME, playerName),
+            )
+        }
+
+        internal fun selectDiscoveredServer(context: Context, serverId: String) {
+            context.startService(
+                Intent(context, PlaybackService::class.java)
+                    .setAction(ACTION_SELECT_DISCOVERED)
+                    .putExtra(EXTRA_SERVER_ID, serverId),
             )
         }
 

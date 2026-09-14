@@ -74,6 +74,35 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
         PlaybackService.connect(app, address, normalizedPlayerName)
     }
 
+    fun discover() {
+        val currentState = _uiState.value
+        val playerName = PlayerNamePolicy.validate(currentState.playerName)
+        if (!playerName.isValid) {
+            _uiState.value = currentState.copy(playerNameError = playerName.error)
+            return
+        }
+        val normalizedPlayerName = playerName.normalized.orEmpty()
+        preferences.edit { putString(PLAYER_NAME_KEY, normalizedPlayerName) }
+        _uiState.value = currentState.copy(
+            playerName = normalizedPlayerName,
+            playerNameError = null,
+            discoveredServers = emptyList(),
+        )
+        PlaybackService.discover(app, normalizedPlayerName)
+    }
+
+    fun selectDiscoveredServer(id: String) {
+        if (id.isBlank()) return
+        PlaybackService.selectDiscoveredServer(app, id)
+    }
+
+    fun localNetworkPermissionDenied() {
+        _uiState.value = _uiState.value.copy(
+            connectionState = ConnectionState.ERROR,
+            detail = "Allow local network access to find or connect to a Home Assistant server.",
+        )
+    }
+
     fun disconnect() {
         PlaybackService.stop(app)
     }
