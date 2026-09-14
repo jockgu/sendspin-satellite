@@ -1,0 +1,21 @@
+name: Native tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  host-native-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure host tests
+        run: cmake -S app/src/main/cpp -B build/native-tests -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build host tests
+        run: cmake --build build/native-tests --parallel
+
+      - name: Run host tests and short soak
+        run: ctest --test-dir build/native-tests --output-on-failure

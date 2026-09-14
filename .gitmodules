@@ -1,0 +1,4 @@
+[submodule "app/src/main/cpp/third_party/sendspin-cpp"]
+	path = app/src/main/cpp/third_party/sendspin-cpp
+	url = git@github.com:jockgu/sendspin-cpp.git
+	branch = player-stream-clear-callback
