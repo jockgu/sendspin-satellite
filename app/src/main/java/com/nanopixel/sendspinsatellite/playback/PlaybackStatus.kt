@@ -16,6 +16,7 @@ data class PlaybackStatus(
     val nativeDiagnostics: NativePlaybackEngine.Diagnostics? = null,
     val audioDiagnostics: AlphaAudioDiagnostics? = null,
     val discoveredServers: List<DiscoveredServer> = emptyList(),
+    val nowPlaying: NowPlayingSnapshot = NowPlayingSnapshot(),
 )
 
 fun PlaybackStatus.toUiState(current: ConnectionUiState) = current.copy(
@@ -27,4 +28,5 @@ fun PlaybackStatus.toUiState(current: ConnectionUiState) = current.copy(
     clockSamples = clockSamples,
     audioDiagnostics = audioDiagnostics,
     discoveredServers = discoveredServers,
+    nowPlaying = nowPlaying,
 )

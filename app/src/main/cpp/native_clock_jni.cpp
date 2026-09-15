@@ -1,6 +1,8 @@
 #include <jni.h>
 
 #include <iterator>
+#include <optional>
+#include <string>
 
 #include "clock_filter.h"
 #include "native_playback_engine.h"
@@ -24,6 +26,150 @@ RecoveryCause recovery_cause(jint value) {
         default:
             return RecoveryCause::OutputError;
     }
+}
+
+jstring utf8_string(JNIEnv* env, const std::optional<std::string>& value) {
+    if (!value.has_value()) return nullptr;
+
+    auto bytes = env->NewByteArray(static_cast<jsize>(value->size()));
+    if (bytes == nullptr) return nullptr;
+    env->SetByteArrayRegion(
+        bytes, 0, static_cast<jsize>(value->size()),
+        reinterpret_cast<const jbyte*>(value->data()));
+
+    const auto standard_charsets = env->FindClass("java/nio/charset/StandardCharsets");
+    const auto string_class = env->FindClass("java/lang/String");
+    if (standard_charsets == nullptr || string_class == nullptr) {
+        env->DeleteLocalRef(bytes);
+        return nullptr;
+    }
+    const auto utf8_field = env->GetStaticFieldID(
+        standard_charsets, "UTF_8", "Ljava/nio/charset/Charset;");
+    const auto constructor = env->GetMethodID(
+        string_class, "<init>", "([BLjava/nio/charset/Charset;)V");
+    if (utf8_field == nullptr || constructor == nullptr) {
+        env->DeleteLocalRef(bytes);
+        env->DeleteLocalRef(standard_charsets);
+        env->DeleteLocalRef(string_class);
+        return nullptr;
+    }
+    const auto utf8 = env->GetStaticObjectField(standard_charsets, utf8_field);
+    const auto result = static_cast<jstring>(env->NewObject(string_class, constructor, bytes, utf8));
+    env->DeleteLocalRef(bytes);
+    env->DeleteLocalRef(utf8);
+    env->DeleteLocalRef(standard_charsets);
+    env->DeleteLocalRef(string_class);
+    return result;
+}
+
+jobject now_playing_snapshot(
+    JNIEnv* env, const sendspin::NowPlayingState::Snapshot& snapshot) {
+    jobject progress = nullptr;
+    if (snapshot.progress.has_value()) {
+        const auto progress_class = env->FindClass(
+            "com/nanopixel/sendspinsatellite/playback/NowPlayingSnapshot$Progress");
+        if (progress_class == nullptr) return nullptr;
+        const auto constructor = env->GetMethodID(progress_class, "<init>", "(JJI)V");
+        if (constructor == nullptr) {
+            env->DeleteLocalRef(progress_class);
+            return nullptr;
+        }
+        progress = env->NewObject(
+            progress_class,
+            constructor,
+            static_cast<jlong>(snapshot.progress->reported_position_ms),
+            static_cast<jlong>(snapshot.progress->duration_ms),
+            static_cast<jint>(snapshot.progress->playback_speed_milli));
+        env->DeleteLocalRef(progress_class);
+        if (progress == nullptr) return nullptr;
+    }
+
+    jobject group = nullptr;
+    if (snapshot.group.has_value()) {
+        const auto group_class = env->FindClass(
+            "com/nanopixel/sendspinsatellite/playback/NowPlayingSnapshot$Group");
+        const auto playback_state_class = env->FindClass(
+            "com/nanopixel/sendspinsatellite/playback/NowPlayingSnapshot$PlaybackState");
+        if (group_class == nullptr || playback_state_class == nullptr) {
+            if (progress != nullptr) env->DeleteLocalRef(progress);
+            return nullptr;
+        }
+        const auto constructor = env->GetMethodID(
+            group_class,
+            "<init>",
+            "(Ljava/lang/String;Lcom/nanopixel/sendspinsatellite/playback/"
+            "NowPlayingSnapshot$PlaybackState;)V");
+        jobject playback_state = nullptr;
+        if (snapshot.group->playback_state.has_value()) {
+            const char* field_name =
+                *snapshot.group->playback_state == sendspin::NowPlayingState::GroupPlaybackState::Playing
+                    ? "PLAYING"
+                    : "STOPPED";
+            const auto field = env->GetStaticFieldID(
+                playback_state_class,
+                field_name,
+                "Lcom/nanopixel/sendspinsatellite/playback/"
+                "NowPlayingSnapshot$PlaybackState;");
+            if (field == nullptr) {
+                env->DeleteLocalRef(group_class);
+                env->DeleteLocalRef(playback_state_class);
+                if (progress != nullptr) env->DeleteLocalRef(progress);
+                return nullptr;
+            }
+            playback_state = env->GetStaticObjectField(playback_state_class, field);
+        }
+        const auto group_name = utf8_string(env, snapshot.group->name);
+        group = constructor == nullptr
+            ? nullptr
+            : env->NewObject(group_class, constructor, group_name, playback_state);
+        if (group_name != nullptr) env->DeleteLocalRef(group_name);
+        if (playback_state != nullptr) env->DeleteLocalRef(playback_state);
+        env->DeleteLocalRef(group_class);
+        env->DeleteLocalRef(playback_state_class);
+        if (group == nullptr) {
+            if (progress != nullptr) env->DeleteLocalRef(progress);
+            return nullptr;
+        }
+    }
+
+    const auto snapshot_class = env->FindClass(
+        "com/nanopixel/sendspinsatellite/playback/NowPlayingSnapshot");
+    if (snapshot_class == nullptr) {
+        if (progress != nullptr) env->DeleteLocalRef(progress);
+        if (group != nullptr) env->DeleteLocalRef(group);
+        return nullptr;
+    }
+    const auto constructor = env->GetMethodID(
+        snapshot_class,
+        "<init>",
+        "(JJLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;"
+        "Lcom/nanopixel/sendspinsatellite/playback/NowPlayingSnapshot$Progress;"
+        "Lcom/nanopixel/sendspinsatellite/playback/NowPlayingSnapshot$Group;)V");
+    const auto title = utf8_string(env, snapshot.title);
+    const auto artist = utf8_string(env, snapshot.artist);
+    const auto album_artist = utf8_string(env, snapshot.album_artist);
+    const auto album = utf8_string(env, snapshot.album);
+    const auto result = constructor == nullptr
+        ? nullptr
+        : env->NewObject(
+              snapshot_class,
+              constructor,
+              static_cast<jlong>(snapshot.revision),
+              static_cast<jlong>(snapshot.generation),
+              title,
+              artist,
+              album_artist,
+              album,
+              progress,
+              group);
+    if (title != nullptr) env->DeleteLocalRef(title);
+    if (artist != nullptr) env->DeleteLocalRef(artist);
+    if (album_artist != nullptr) env->DeleteLocalRef(album_artist);
+    if (album != nullptr) env->DeleteLocalRef(album);
+    if (progress != nullptr) env->DeleteLocalRef(progress);
+    if (group != nullptr) env->DeleteLocalRef(group);
+    env->DeleteLocalRef(snapshot_class);
+    return result;
 }
 
 }  // namespace
@@ -181,4 +327,13 @@ Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeDiagnos
     if (result == nullptr) return nullptr;
     env->SetLongArrayRegion(result, 0, static_cast<jsize>(std::size(values)), values);
     return result;
+}
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeNowPlayingIfChanged(
+    JNIEnv* env, jclass, jlong handle, jlong known_revision) {
+    const auto snapshot = reinterpret_cast<NativePlaybackEngine*>(handle)->now_playing_after(
+        static_cast<uint64_t>(known_revision));
+    if (!snapshot.has_value()) return nullptr;
+    return now_playing_snapshot(env, *snapshot);
 }

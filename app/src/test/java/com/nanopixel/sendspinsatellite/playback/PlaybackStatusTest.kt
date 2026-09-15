@@ -43,4 +43,44 @@ class PlaybackStatusTest {
 
         assertEquals("Music Assistant", uiState.serverName)
     }
+
+    @Test
+    fun `service status carries now playing snapshot unchanged`() {
+        val nowPlaying = NowPlayingSnapshot(
+            revision = 8,
+            generation = 3,
+            title = "Track title",
+            artist = "Artist",
+            albumArtist = "Album artist",
+            album = "Album",
+            progress = NowPlayingSnapshot.Progress(
+                reportedPositionMs = 12_345,
+                durationMs = 234_567,
+                playbackSpeedMilli = 1_000,
+            ),
+            group = NowPlayingSnapshot.Group(
+                name = "Downstairs",
+                playbackState = NowPlayingSnapshot.PlaybackState.PLAYING,
+            ),
+        )
+
+        val uiState = PlaybackStatus(nowPlaying = nowPlaying).toUiState(ConnectionUiState())
+
+        assertEquals(nowPlaying, uiState.nowPlaying)
+    }
+
+    @Test
+    fun `fresh service status clears previous now playing without replacing configuration`() {
+        val current = ConnectionUiState(
+            serverAddress = "ws://server/sendspin",
+            playerName = "Kitchen Speaker",
+            nowPlaying = NowPlayingSnapshot(title = "Old track"),
+        )
+
+        val uiState = PlaybackStatus().toUiState(current)
+
+        assertEquals(NowPlayingSnapshot(), uiState.nowPlaying)
+        assertEquals("ws://server/sendspin", uiState.serverAddress)
+        assertEquals("Kitchen Speaker", uiState.playerName)
+    }
 }

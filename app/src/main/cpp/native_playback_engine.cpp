@@ -39,11 +39,13 @@ bool has_cause(
 
 NativePlaybackEngine::NativePlaybackEngine(std::string client_id, std::string player_name)
     : listener_(output_, &NativePlaybackEngine::on_stream_started, this),
-    client_(client_config(client_id, player_name)),
-      player_(client_.add_player(player_config())) {
+      client_(client_config(client_id, player_name)),
+      player_(client_.add_player(player_config())),
+      metadata_(client_.add_metadata()) {
     client_.set_listener(this);
     client_.set_network_provider(this);
     player_.set_listener(&listener_);
+    metadata_.set_listener(this);
     output_.set_playback_observer(&NativePlaybackEngine::on_frames_played, this);
 }
 NativePlaybackEngine::~NativePlaybackEngine() {
@@ -57,6 +59,7 @@ bool NativePlaybackEngine::connect(std::string url) {
         state_.store(State::Error, std::memory_order_release);
         return false;
     }
+    now_playing_.clear_all_current_generation();
     {
         std::lock_guard lock(control_mutex_);
         pending_url_ = std::move(url);
@@ -69,6 +72,7 @@ bool NativePlaybackEngine::connect(std::string url) {
     return true;
 }
 void NativePlaybackEngine::disconnect() {
+    now_playing_.clear_all_current_generation();
     std::lock_guard lock(control_mutex_);
     pending_url_.clear();
     disconnect_requested_ = true;
@@ -90,6 +94,10 @@ NativePlaybackEngine::State NativePlaybackEngine::state() const { return state_.
 NativePlaybackEngine::Diagnostics NativePlaybackEngine::diagnostics() const {
     std::lock_guard lock(diagnostics_mutex_);
     return diagnostics_;
+}
+std::optional<NowPlayingState::Snapshot> NativePlaybackEngine::now_playing_after(
+    const uint64_t known_revision) const {
+    return now_playing_.snapshot_after(known_revision);
 }
 bool NativePlaybackEngine::is_network_ready() {
     return network_available_.load(std::memory_order_acquire);
@@ -113,6 +121,35 @@ void NativePlaybackEngine::on_time_sync_updated(const float error) {
         }
     }
     publish_state();
+}
+void NativePlaybackEngine::on_group_update(const GroupUpdateObject&) {
+    const auto& group = client_.get_group_state();
+    NowPlayingState::Group snapshot;
+    snapshot.name = group.group_name;
+    if (group.playback_state.has_value()) {
+        snapshot.playback_state = *group.playback_state == SendspinPlaybackState::PLAYING
+            ? NowPlayingState::GroupPlaybackState::Playing
+            : NowPlayingState::GroupPlaybackState::Stopped;
+    }
+    now_playing_.update_group(recovery_state_.recovery_generation(), std::move(snapshot));
+}
+void NativePlaybackEngine::on_metadata(const ServerMetadataStateObject& metadata) {
+    NowPlayingState::Metadata snapshot;
+    snapshot.title = metadata.title;
+    snapshot.artist = metadata.artist;
+    snapshot.album_artist = metadata.album_artist;
+    snapshot.album = metadata.album;
+    if (metadata.progress.has_value()) {
+        snapshot.progress = NowPlayingState::Progress{
+            .reported_position_ms = metadata.progress->track_progress,
+            .duration_ms = metadata.progress->track_duration,
+            .playback_speed_milli = metadata.progress->playback_speed,
+        };
+    }
+    now_playing_.update_metadata(recovery_state_.recovery_generation(), std::move(snapshot));
+}
+void NativePlaybackEngine::on_metadata_clear() {
+    now_playing_.clear_metadata(recovery_state_.recovery_generation());
 }
 void NativePlaybackEngine::on_frames_played(void* context, uint32_t frames) {
     auto* engine = static_cast<NativePlaybackEngine*>(context);
@@ -227,6 +264,7 @@ void NativePlaybackEngine::run() {
         if (focus_suspend_requested && !focus_suspended) {
             focus_suspended = true;
             if (recovery_state_.suspend_for_focus()) {
+                now_playing_.clear_all(recovery_state_.recovery_generation());
                 reconnect_policy_.cancel();
                 reconnect_attempt_active_ = false;
                 output_.stop();
@@ -265,6 +303,9 @@ void NativePlaybackEngine::run() {
                 recovery_state_.state() == PlaybackRecoveryState::State::Recovering;
             const bool began_recovery = recovery_state_.begin_recovery();
             if (began_recovery || already_recovering) {
+                if (began_recovery) {
+                    now_playing_.clear_all(recovery_state_.recovery_generation());
+                }
                 if (has_cause(recovery_causes,
                               PlaybackRecoveryState::RecoveryCause::NetworkLost)) {
                     record_failure(Failure::NetworkUnavailable);
@@ -351,6 +392,7 @@ void NativePlaybackEngine::run() {
             output_.clear();
             const bool began_recovery = recovery_state_.begin_recovery();
             if (began_recovery) {
+                now_playing_.clear_all(recovery_state_.recovery_generation());
                 record_hard_resync();
                 publish_state();
             }

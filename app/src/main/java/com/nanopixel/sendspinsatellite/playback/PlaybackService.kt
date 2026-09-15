@@ -533,6 +533,11 @@ class PlaybackService : Service() {
                 ))
                 nativeSnapshot?.let(::logDiagnostics)
             }
+
+            override fun onNowPlaying(snapshot: NowPlayingSnapshot) {
+                if (generation != sessionGeneration) return
+                publish(status.value.copy(nowPlaying = snapshot))
+            }
         }).also { session = it }
     }
 
