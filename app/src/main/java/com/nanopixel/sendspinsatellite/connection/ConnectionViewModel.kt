@@ -16,9 +16,10 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     private val app = getApplication<Application>()
     private val preferences = app.getSharedPreferences(PREFERENCES_NAME, Application.MODE_PRIVATE)
     private val defaultPlayerName = PlayerNamePolicy.defaultFor(Build.MODEL)
+    private var automaticConnectionAttempted = false
     private val _uiState = MutableStateFlow(
         ConnectionUiState(
-            serverAddress = preferences.getString(SERVER_ADDRESS_KEY, "").orEmpty(),
+            serverAddress = preferences.getString(LAST_WORKING_SERVER_KEY, "").orEmpty(),
             playerName = preferences.getString(PLAYER_NAME_KEY, null) ?: defaultPlayerName,
         ),
     )
@@ -26,9 +27,42 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     init {
         viewModelScope.launch {
             PlaybackService.state.collect { status ->
+                if (status.connectionState == ConnectionState.READY) {
+                    val address = _uiState.value.serverAddress.trim()
+                    if (address.startsWith("ws://")) {
+                        preferences.edit { putString(LAST_WORKING_SERVER_KEY, address) }
+                    }
+                }
+                if (automaticConnectionAttempted && status.connectionState == ConnectionState.ERROR) {
+                    _uiState.value = status.toUiState(_uiState.value).copy(
+                        detail = "The last known server could not be reached. Connect manually or find a local server.",
+                    )
+                    return@collect
+                }
                 _uiState.value = status.toUiState(_uiState.value)
             }
         }
+    }
+
+    fun hasLastWorkingServer(): Boolean =
+        preferences.getString(LAST_WORKING_SERVER_KEY, null)?.isNotBlank() == true
+
+    fun autoConnect() {
+        if (automaticConnectionAttempted) return
+        automaticConnectionAttempted = true
+        val address = preferences.getString(LAST_WORKING_SERVER_KEY, null).orEmpty()
+        if (address.isBlank() || _uiState.value.connectionState !in setOf(
+                ConnectionState.DISCONNECTED,
+                ConnectionState.ERROR,
+            )
+        ) {
+            return
+        }
+        _uiState.value = _uiState.value.copy(
+            serverAddress = address,
+            detail = "Connecting to the last known Sendspin server.",
+        )
+        connect()
     }
 
     fun updateServerAddress(address: String) {
@@ -63,7 +97,6 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
         }
         val normalizedPlayerName = playerName.normalized.orEmpty()
         preferences.edit {
-            putString(SERVER_ADDRESS_KEY, address)
             putString(PLAYER_NAME_KEY, normalizedPlayerName)
         }
         _uiState.value = currentState.copy(
@@ -109,7 +142,7 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
 
     private companion object {
         const val PREFERENCES_NAME = "sendspin_settings"
-        const val SERVER_ADDRESS_KEY = "server_address"
+        private const val LAST_WORKING_SERVER_KEY = "last_working_server"
         const val PLAYER_NAME_KEY = "player_name"
     }
 }

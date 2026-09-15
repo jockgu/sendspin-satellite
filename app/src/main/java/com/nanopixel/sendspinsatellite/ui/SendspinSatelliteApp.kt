@@ -124,6 +124,15 @@ fun SendspinSatelliteApp(
                     placeholder = { Text("ws://server.local:8927/sendspin") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
+                if (state.connectionState == ConnectionState.DISCONNECTED &&
+                    state.serverAddress.isNotBlank()
+                ) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "The saved server is ready to connect. You can edit it or find another local server.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 Spacer(Modifier.height(16.dp))
                 OutlinedButton(
                     onClick = onDiscover,

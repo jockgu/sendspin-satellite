@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nanopixel.sendspinsatellite.connection.ConnectionViewModel
 import com.nanopixel.sendspinsatellite.ui.SendspinSatelliteApp
@@ -30,6 +31,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val state by connectionViewModel.uiState.collectAsStateWithLifecycle()
+            LaunchedEffect(Unit) {
+                if (connectionViewModel.hasLastWorkingServer()) {
+                    withLocalNetworkPermission(connectionViewModel::autoConnect)
+                }
+            }
             SendspinSatelliteApp(
                 state = state,
                 onServerAddressChanged = connectionViewModel::updateServerAddress,
