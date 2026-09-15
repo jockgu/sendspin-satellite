@@ -32,11 +32,13 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
                     if (address.startsWith("ws://")) {
                         preferences.edit { putString(LAST_WORKING_SERVER_KEY, address) }
                     }
+                    automaticConnectionAttempted = false
                 }
                 if (automaticConnectionAttempted && status.connectionState == ConnectionState.ERROR) {
                     _uiState.value = status.toUiState(_uiState.value).copy(
                         detail = "The last known server could not be reached. Connect manually or find a local server.",
                     )
+                    automaticConnectionAttempted = false
                     return@collect
                 }
                 _uiState.value = status.toUiState(_uiState.value)
@@ -48,18 +50,11 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
         preferences.getString(LAST_WORKING_SERVER_KEY, null)?.isNotBlank() == true
 
     fun autoConnect() {
-        if (automaticConnectionAttempted) return
+        val address = preferences.getString(LAST_WORKING_SERVER_KEY, null)
+        if (!shouldAutoConnect(address, automaticConnectionAttempted, _uiState.value.connectionState)) return
         automaticConnectionAttempted = true
-        val address = preferences.getString(LAST_WORKING_SERVER_KEY, null).orEmpty()
-        if (address.isBlank() || _uiState.value.connectionState !in setOf(
-                ConnectionState.DISCONNECTED,
-                ConnectionState.ERROR,
-            )
-        ) {
-            return
-        }
         _uiState.value = _uiState.value.copy(
-            serverAddress = address,
+            serverAddress = address.orEmpty(),
             detail = "Connecting to the last known Sendspin server.",
         )
         connect()
