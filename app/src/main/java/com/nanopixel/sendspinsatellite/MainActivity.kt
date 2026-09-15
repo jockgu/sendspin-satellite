@@ -32,9 +32,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by connectionViewModel.uiState.collectAsStateWithLifecycle()
             LaunchedEffect(Unit) {
-                if (connectionViewModel.hasLastWorkingServer()) {
-                    withLocalNetworkPermission(connectionViewModel::autoConnect)
-                }
+                withLocalNetworkPermission(connectionViewModel::start)
             }
             SendspinSatelliteApp(
                 state = state,
@@ -44,6 +42,7 @@ class MainActivity : ComponentActivity() {
                 onDiscover = { withLocalNetworkPermission(connectionViewModel::discover) },
                 onSelectDiscoveredServer = connectionViewModel::selectDiscoveredServer,
                 onDisconnect = connectionViewModel::disconnect,
+                onForgetServer = connectionViewModel::forgetServer,
             )
         }
     }
