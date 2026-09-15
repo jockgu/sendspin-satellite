@@ -51,7 +51,8 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
 
     fun autoConnect() {
         val address = preferences.getString(LAST_WORKING_SERVER_KEY, null)
-        if (!shouldAutoConnect(address, automaticConnectionAttempted, _uiState.value.connectionState)) return
+        val activeState = PlaybackService.state.value.connectionState
+        if (!shouldAutoConnect(address, automaticConnectionAttempted, activeState)) return
         automaticConnectionAttempted = true
         _uiState.value = _uiState.value.copy(
             serverAddress = address.orEmpty(),
