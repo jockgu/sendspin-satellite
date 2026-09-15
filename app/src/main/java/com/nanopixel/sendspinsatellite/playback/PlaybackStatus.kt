@@ -2,11 +2,13 @@ package com.nanopixel.sendspinsatellite.playback
 
 import com.nanopixel.sendspinsatellite.connection.ConnectionState
 import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
+import com.nanopixel.sendspinsatellite.connection.SavedServer
 import com.nanopixel.sendspinsatellite.protocol.NativePlaybackEngine
 
 data class PlaybackStatus(
     val connectionState: ConnectionState = ConnectionState.DISCONNECTED,
     val detail: String = "Disconnected from Sendspin server.",
+    val server: SavedServer? = null,
     val serverName: String? = null,
     val roundTripUs: Long? = null,
     val clockOffsetUs: Long? = null,
@@ -19,7 +21,7 @@ data class PlaybackStatus(
 fun PlaybackStatus.toUiState(current: ConnectionUiState) = current.copy(
     connectionState = connectionState,
     detail = detail,
-    serverName = serverName,
+    serverName = server?.name ?: serverName,
     roundTripUs = roundTripUs,
     clockOffsetUs = clockOffsetUs,
     clockSamples = clockSamples,

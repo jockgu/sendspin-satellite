@@ -2,6 +2,7 @@ package com.nanopixel.sendspinsatellite.playback
 
 import com.nanopixel.sendspinsatellite.connection.ConnectionState
 import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
+import com.nanopixel.sendspinsatellite.connection.SavedServer
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -31,5 +32,15 @@ class PlaybackStatusTest {
 
         assertEquals(listOf(server), uiState.discoveredServers)
         assertEquals("ws://manual/sendspin", uiState.serverAddress)
+    }
+
+    @Test
+    fun `service status carries the selected server name for the player screen`() {
+        val uiState = PlaybackStatus(
+            connectionState = ConnectionState.READY,
+            server = SavedServer("ws://192.168.1.20:8927/sendspin", "Music Assistant"),
+        ).toUiState(ConnectionUiState())
+
+        assertEquals("Music Assistant", uiState.serverName)
     }
 }

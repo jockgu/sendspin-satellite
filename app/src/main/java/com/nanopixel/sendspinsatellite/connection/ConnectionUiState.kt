@@ -16,6 +16,7 @@ enum class ConnectionState(val label: String) {
 }
 
 data class ConnectionUiState(
+    val savedServer: SavedServer? = null,
     val serverAddress: String = "",
     val playerName: String = PlayerNamePolicy.defaultName,
     val playerNameError: String? = null,
