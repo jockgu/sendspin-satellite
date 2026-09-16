@@ -271,7 +271,7 @@ void NativePlaybackEngine::drain_playback_feedback() {
     }
 }
 void NativePlaybackEngine::run() {
-    if (!client_.start_server()) {
+    if (!client_.start()) {
         recovery_state_.fail();
         publish_state();
         running_.store(false, std::memory_order_release);
@@ -461,6 +461,6 @@ void NativePlaybackEngine::run() {
         refresh_output_diagnostics();
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    client_.disconnect(SendspinGoodbyeReason::USER_REQUEST);
+    client_.stop();
 }
 }  // namespace sendspin
