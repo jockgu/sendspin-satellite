@@ -127,7 +127,7 @@ class NowPlayingPresentationTest {
     }
 
     @Test
-    fun `zero metadata speed reports paused without rendering progress`() {
+    fun `zero metadata speed reports paused with frozen finite progress`() {
         val presentation = ConnectionUiState(
             connectionState = ConnectionState.PLAYING,
             nowPlaying = NowPlayingSnapshot(
@@ -142,6 +142,8 @@ class NowPlayingPresentationTest {
 
         assertEquals("Paused", presentation.status)
         assertEquals("Paused track", presentation.title)
+        assertEquals("0:12", presentation.progress?.elapsedLabel)
+        assertEquals("3:00", presentation.progress?.durationLabel)
         assertNull(presentation.emptyState)
     }
 

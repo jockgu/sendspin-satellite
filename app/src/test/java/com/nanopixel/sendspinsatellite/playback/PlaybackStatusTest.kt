@@ -74,6 +74,7 @@ class PlaybackStatusTest {
                 reportedPositionMs = 12_345,
                 durationMs = 234_567,
                 playbackSpeedMilli = 1_000,
+                interpolatedPositionMs = 23_456,
             ),
             group = NowPlayingSnapshot.Group(
                 name = "Downstairs",

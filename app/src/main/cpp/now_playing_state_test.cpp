@@ -28,6 +28,7 @@ int main() {
         .reported_position_ms = 12'345,
         .duration_ms = 234'567,
         .playback_speed_milli = 1'000,
+        .interpolated_position_ms = 12'345,
     };
     state.update_metadata(2, std::move(metadata));
 
@@ -42,14 +43,63 @@ int main() {
     assert(populated->progress->reported_position_ms == 12'345);
     assert(populated->progress->duration_ms == 234'567);
     assert(populated->progress->playback_speed_milli == 1'000);
+    assert(populated->progress->interpolated_position_ms == 12'345);
+
+    state.update_interpolated_progress(2, 34'567);
+    const auto interpolated = state.snapshot_after(populated->revision);
+    assert(interpolated.has_value());
+    assert(interpolated->progress->reported_position_ms == 12'345);
+    assert(interpolated->progress->interpolated_position_ms == 34'567);
+    assert(!state.snapshot_after(interpolated->revision).has_value());
+
+    state.update_interpolated_progress(2, 7'000);
+    const auto seek_corrected = state.snapshot_after(interpolated->revision);
+    assert(seek_corrected.has_value());
+    assert(seek_corrected->progress->reported_position_ms == 12'345);
+    assert(seek_corrected->progress->interpolated_position_ms == 7'000);
+
+    state.update_interpolated_progress(2, 300'000);
+    const auto bounded = state.snapshot_after(seek_corrected->revision);
+    assert(bounded.has_value());
+    assert(bounded->progress->interpolated_position_ms == 234'567);
+
+    NowPlayingState::Metadata paused_metadata;
+    paused_metadata.title = "Paused track";
+    paused_metadata.progress = NowPlayingState::Progress{
+        .reported_position_ms = 45'000,
+        .duration_ms = 234'567,
+        .playback_speed_milli = 0,
+        .interpolated_position_ms = 45'000,
+    };
+    state.update_metadata(2, std::move(paused_metadata));
+    const auto paused = state.snapshot_after(bounded->revision);
+    assert(paused.has_value());
+    assert(paused->progress->interpolated_position_ms == 45'000);
+    state.update_interpolated_progress(2, 60'000);
+    assert(!state.snapshot_after(paused->revision).has_value());
+
+    NowPlayingState::Metadata replacement_metadata;
+    replacement_metadata.title = "New track";
+    replacement_metadata.progress = NowPlayingState::Progress{
+        .reported_position_ms = 2'000,
+        .duration_ms = 90'000,
+        .playback_speed_milli = 1'000,
+        .interpolated_position_ms = 2'000,
+    };
+    state.update_metadata(2, std::move(replacement_metadata));
+    const auto replacement = state.snapshot_after(paused->revision);
+    assert(replacement.has_value());
+    assert(replacement->title == std::optional<std::string>("New track"));
+    assert(replacement->progress->reported_position_ms == 2'000);
+    assert(replacement->progress->interpolated_position_ms == 2'000);
 
     state.update_group(2, NowPlayingState::Group{
         .name = "Downstairs",
         .playback_state = NowPlayingState::GroupPlaybackState::Playing,
     });
-    const auto with_group = state.snapshot_after(populated->revision);
+    const auto with_group = state.snapshot_after(replacement->revision);
     assert(with_group.has_value());
-    assert(with_group->title == populated->title);
+    assert(with_group->title == replacement->title);
     assert(with_group->group.has_value());
     assert(with_group->group->name == std::optional<std::string>("Downstairs"));
     assert(with_group->group->playback_state == NowPlayingState::GroupPlaybackState::Playing);

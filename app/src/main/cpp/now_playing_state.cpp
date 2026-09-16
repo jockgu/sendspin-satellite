@@ -1,5 +1,6 @@
 #include "now_playing_state.h"
 
+#include <algorithm>
 #include <utility>
 
 namespace sendspin {
@@ -8,11 +9,34 @@ void NowPlayingState::update_metadata(const uint32_t generation, Metadata metada
     std::lock_guard lock(mutex_);
     if (!accept_generation_locked(generation)) return;
 
+    if (metadata.progress.has_value()) {
+        metadata.progress->interpolated_position_ms =
+            metadata.progress->reported_position_ms;
+    }
+
     snapshot_.title = std::move(metadata.title);
     snapshot_.artist = std::move(metadata.artist);
     snapshot_.album_artist = std::move(metadata.album_artist);
     snapshot_.album = std::move(metadata.album);
     snapshot_.progress = metadata.progress;
+    advance_revision_locked();
+}
+
+void NowPlayingState::update_interpolated_progress(
+    const uint32_t generation, const uint32_t position_ms) {
+    std::lock_guard lock(mutex_);
+    if (!accept_generation_locked(generation)) return;
+    if (!snapshot_.progress.has_value() ||
+        snapshot_.progress->duration_ms == 0 ||
+        snapshot_.progress->playback_speed_milli == 0) {
+        return;
+    }
+
+    const auto bounded_position = std::min(
+        position_ms, snapshot_.progress->duration_ms);
+    if (snapshot_.progress->interpolated_position_ms == bounded_position) return;
+
+    snapshot_.progress->interpolated_position_ms = bounded_position;
     advance_revision_locked();
 }
 

@@ -47,6 +47,7 @@ bool has_cause(
     const PlaybackRecoveryState::RecoveryCause cause) {
     return (mask & static_cast<PlaybackRecoveryState::RecoveryCauseMask>(cause)) != 0;
 }
+constexpr int64_t kProgressSampleIntervalUs = 1'000'000;
 }  // namespace
 
 NativePlaybackEngine::NativePlaybackEngine(std::string client_id, std::string player_name)
@@ -280,6 +281,7 @@ void NativePlaybackEngine::run() {
     bool focus_suspended = false;
     bool had_connection = false;
     bool was_network_available = network_available_.load(std::memory_order_acquire);
+    int64_t next_progress_sample_us = 0;
     while (running_.load(std::memory_order_acquire)) {
         const auto now_us = monotonic_us();
         if (output_.take_error_recovery_request()) {
@@ -427,6 +429,15 @@ void NativePlaybackEngine::run() {
             publish_state();
         }
         const bool connected = client_.is_connected();
+        const auto progress_sample_now_us = monotonic_us();
+        if (connected && progress_sample_now_us >= next_progress_sample_us) {
+            next_progress_sample_us = progress_sample_now_us + kProgressSampleIntervalUs;
+            if (metadata_.get_track_duration_ms() > 0) {
+                now_playing_.update_interpolated_progress(
+                    recovery_state_.recovery_generation(),
+                    metadata_.get_track_progress_ms());
+            }
+        }
         if (had_connection && !connected) {
             recovery_state_.request_recovery(
                 PlaybackRecoveryState::RecoveryCause::TransportLost);

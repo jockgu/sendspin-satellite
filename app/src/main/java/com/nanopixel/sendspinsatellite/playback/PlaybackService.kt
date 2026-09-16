@@ -541,7 +541,7 @@ class PlaybackService : Service() {
 
             override fun onNowPlaying(snapshot: NowPlayingSnapshot) {
                 if (generation != sessionGeneration) return
-                publish(status.value.copy(nowPlaying = snapshot))
+                publish(status.value.copy(nowPlaying = snapshot), refreshNotification = false)
             }
 
             override fun onArtwork(snapshot: ArtworkSnapshot) {
@@ -618,9 +618,9 @@ class PlaybackService : Service() {
         session = null
     }
 
-    private fun publish(nextStatus: PlaybackStatus) {
+    private fun publish(nextStatus: PlaybackStatus, refreshNotification: Boolean = true) {
         status.value = nextStatus
-        if (isForegroundService) {
+        if (refreshNotification && isForegroundService) {
             getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification())
         }
     }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
@@ -23,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,6 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -60,11 +64,18 @@ internal data class NowPlayingPresentation(
     val title: String?,
     val artist: String?,
     val album: String?,
+    val progress: ProgressPresentation?,
     val emptyState: String?,
     val context: String?,
     val showConnectionProgress: Boolean,
     val showReconnect: Boolean,
     val showDisconnect: Boolean,
+)
+
+internal data class ProgressPresentation(
+    val fraction: Float,
+    val elapsedLabel: String,
+    val durationLabel: String,
 )
 
 internal fun shouldShowNowPlaying(state: ConnectionUiState): Boolean {
@@ -83,6 +94,32 @@ internal fun shouldShowNowPlaying(state: ConnectionUiState): Boolean {
 
 private fun String?.present(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 
+internal fun formatDurationMs(milliseconds: Long): String {
+    val totalSeconds = milliseconds.coerceAtLeast(0) / 1_000
+    val seconds = totalSeconds % 60
+    val minutes = (totalSeconds / 60) % 60
+    val hours = totalSeconds / 3_600
+    val paddedSeconds = seconds.toString().padStart(2, '0')
+    return if (hours > 0) {
+        "$hours:${minutes.toString().padStart(2, '0')}:$paddedSeconds"
+    } else {
+        "${totalSeconds / 60}:$paddedSeconds"
+    }
+}
+
+internal fun NowPlayingSnapshot.Progress.toPresentation(): ProgressPresentation? {
+    if (durationMs <= 0) return null
+    val boundedPositionMs = interpolatedPositionMs.coerceIn(0, durationMs)
+    val fraction = (boundedPositionMs.toDouble() / durationMs.toDouble())
+        .toFloat()
+        .coerceIn(0f, 1f)
+    return ProgressPresentation(
+        fraction = fraction,
+        elapsedLabel = formatDurationMs(boundedPositionMs),
+        durationLabel = formatDurationMs(durationMs),
+    )
+}
+
 internal fun ConnectionUiState.toNowPlayingPresentation(): NowPlayingPresentation {
     val title = nowPlaying.title.present()
     val artist = nowPlaying.artist.present() ?: nowPlaying.albumArtist.present()
@@ -93,6 +130,15 @@ internal fun ConnectionUiState.toNowPlayingPresentation(): NowPlayingPresentatio
         nowPlaying.progress?.playbackSpeedMilli == 0 ||
             nowPlaying.group?.playbackState == NowPlayingSnapshot.PlaybackState.STOPPED
         )
+    val progress = nowPlaying.progress
+        ?.takeIf {
+            connectionState in setOf(
+                ConnectionState.READY,
+                ConnectionState.BUFFERING,
+                ConnectionState.PLAYING,
+            )
+        }
+        ?.toPresentation()
     val status = when {
         connectionState in setOf(
             ConnectionState.CONNECTING,
@@ -126,8 +172,8 @@ internal fun ConnectionUiState.toNowPlayingPresentation(): NowPlayingPresentatio
         title = title,
         artist = artist,
         album = album,
-        emptyState = if (title == null && artist == null && album == null &&
-            connectionState in setOf(
+        progress = progress,
+        emptyState = if (!hasCurrentTrack && connectionState in setOf(
                 ConnectionState.READY,
                 ConnectionState.BUFFERING,
                 ConnectionState.PLAYING,
@@ -250,6 +296,9 @@ internal fun NowPlayingScreen(
                     textAlign = TextAlign.Center,
                 )
             }
+            presentation.progress?.let { progress ->
+                TrackProgress(progress)
+            }
             presentation.emptyState?.let { emptyState ->
                 Text(
                     emptyState,
@@ -290,6 +339,42 @@ internal fun NowPlayingScreen(
                     Text("Disconnect")
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TrackProgress(progress: ProgressPresentation) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                contentDescription =
+                    "Playback progress: ${progress.elapsedLabel} of ${progress.durationLabel}"
+            },
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        LinearProgressIndicator(
+            progress = { progress.fraction },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp)),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                progress.elapsedLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                progress.durationLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -402,6 +487,12 @@ private fun PlayingNowPlayingPreview() {
                     title = "A track title",
                     artist = "An artist",
                     album = "An album",
+                    progress = NowPlayingSnapshot.Progress(
+                        reportedPositionMs = 42_000,
+                        durationMs = 214_000,
+                        playbackSpeedMilli = 1_000,
+                        interpolatedPositionMs = 43_000,
+                    ),
                     group = NowPlayingSnapshot.Group(name = "Downstairs"),
                 ),
             ).toNowPlayingPresentation(),
@@ -460,6 +551,29 @@ private fun PausedNowPlayingPreview() {
                         reportedPositionMs = 12_000,
                         durationMs = 180_000,
                         playbackSpeedMilli = 0,
+                    ),
+                ),
+            ).toNowPlayingPresentation(),
+            onSettings = {},
+            onReconnect = {},
+            onDisconnect = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun UnknownDurationNowPlayingPreview() {
+    MaterialTheme {
+        NowPlayingScreen(
+            presentation = ConnectionUiState(
+                connectionState = ConnectionState.PLAYING,
+                nowPlaying = NowPlayingSnapshot(
+                    title = "Internet radio",
+                    progress = NowPlayingSnapshot.Progress(
+                        reportedPositionMs = 12_000,
+                        durationMs = 0,
+                        playbackSpeedMilli = 1_000,
                     ),
                 ),
             ).toNowPlayingPresentation(),

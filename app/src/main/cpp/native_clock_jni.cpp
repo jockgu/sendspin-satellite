@@ -69,7 +69,7 @@ jobject now_playing_snapshot(
         const auto progress_class = env->FindClass(
             "com/nanopixel/sendspinsatellite/playback/NowPlayingSnapshot$Progress");
         if (progress_class == nullptr) return nullptr;
-        const auto constructor = env->GetMethodID(progress_class, "<init>", "(JJI)V");
+        const auto constructor = env->GetMethodID(progress_class, "<init>", "(JJIJ)V");
         if (constructor == nullptr) {
             env->DeleteLocalRef(progress_class);
             return nullptr;
@@ -79,7 +79,8 @@ jobject now_playing_snapshot(
             constructor,
             static_cast<jlong>(snapshot.progress->reported_position_ms),
             static_cast<jlong>(snapshot.progress->duration_ms),
-            static_cast<jint>(snapshot.progress->playback_speed_milli));
+            static_cast<jint>(snapshot.progress->playback_speed_milli),
+            static_cast<jlong>(snapshot.progress->interpolated_position_ms));
         env->DeleteLocalRef(progress_class);
         if (progress == nullptr) return nullptr;
     }

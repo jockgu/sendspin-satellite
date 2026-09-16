@@ -18,6 +18,7 @@ data class NowPlayingSnapshot(
         val reportedPositionMs: Long,
         val durationMs: Long,
         val playbackSpeedMilli: Int,
+        val interpolatedPositionMs: Long = reportedPositionMs,
     )
 
     @Keep

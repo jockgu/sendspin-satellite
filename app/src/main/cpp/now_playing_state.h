@@ -18,6 +18,7 @@ public:
         uint32_t reported_position_ms{0};
         uint32_t duration_ms{0};
         uint32_t playback_speed_milli{0};
+        uint32_t interpolated_position_ms{0};
     };
 
     struct Metadata {
@@ -45,6 +46,7 @@ public:
     };
 
     void update_metadata(uint32_t generation, Metadata metadata);
+    void update_interpolated_progress(uint32_t generation, uint32_t position_ms);
     void clear_metadata(uint32_t generation);
     void update_group(uint32_t generation, Group group);
     void clear_all(uint32_t generation);
