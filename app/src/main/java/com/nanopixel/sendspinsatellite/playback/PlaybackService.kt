@@ -543,6 +543,11 @@ class PlaybackService : Service() {
                 if (generation != sessionGeneration) return
                 publish(status.value.copy(nowPlaying = snapshot))
             }
+
+            override fun onArtwork(snapshot: ArtworkSnapshot) {
+                if (generation != sessionGeneration) return
+                publish(status.value.copy(artwork = snapshot))
+            }
         }).also { session = it }
     }
 

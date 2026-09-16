@@ -63,6 +63,7 @@ fun SendspinSatelliteApp(
                     onSettings = { showSettings = true },
                     onReconnect = onConnect,
                     onDisconnect = onDisconnect,
+                    artwork = state.artwork,
                 )
 
                 else -> ConnectionScreen(

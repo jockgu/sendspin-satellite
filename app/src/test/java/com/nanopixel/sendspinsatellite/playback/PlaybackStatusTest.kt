@@ -3,6 +3,7 @@ package com.nanopixel.sendspinsatellite.playback
 import com.nanopixel.sendspinsatellite.connection.ConnectionState
 import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
 import com.nanopixel.sendspinsatellite.connection.SavedServer
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -86,6 +87,21 @@ class PlaybackStatusTest {
     }
 
     @Test
+    fun `service status carries artwork snapshot unchanged`() {
+        val artwork = ArtworkSnapshot(
+            revision = 4,
+            generation = 2,
+            encodedJpeg = byteArrayOf(1, 2, 3),
+        )
+
+        val uiState = PlaybackStatus(artwork = artwork).toUiState(ConnectionUiState())
+
+        assertEquals(artwork.revision, uiState.artwork.revision)
+        assertEquals(artwork.generation, uiState.artwork.generation)
+        assertArrayEquals(artwork.encodedJpeg, uiState.artwork.encodedJpeg)
+    }
+
+    @Test
     fun `fresh service status clears previous now playing without replacing configuration`() {
         val current = ConnectionUiState(
             serverAddress = "ws://server/sendspin",
@@ -96,6 +112,7 @@ class PlaybackStatusTest {
         val uiState = PlaybackStatus().toUiState(current)
 
         assertEquals(NowPlayingSnapshot(), uiState.nowPlaying)
+        assertEquals(ArtworkSnapshot(), uiState.artwork)
         assertEquals("ws://server/sendspin", uiState.serverAddress)
         assertEquals("Kitchen Speaker", uiState.playerName)
     }

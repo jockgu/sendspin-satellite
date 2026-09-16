@@ -28,7 +28,9 @@ public:
     };
 
     [[nodiscard]] State state() const { return state_; }
-    [[nodiscard]] uint32_t recovery_generation() const { return recovery_generation_; }
+    [[nodiscard]] uint32_t recovery_generation() const {
+        return recovery_generation_.load(std::memory_order_acquire);
+    }
     void connect();
     void synchronising();
     void ready();
@@ -44,7 +46,7 @@ public:
 
 private:
     State state_{State::Stopped};
-    uint32_t recovery_generation_{0};
+    std::atomic<uint32_t> recovery_generation_{0};
     std::atomic<RecoveryCauseMask> pending_recovery_causes_{0};
 };
 

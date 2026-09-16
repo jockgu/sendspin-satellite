@@ -39,7 +39,7 @@ bool PlaybackRecoveryState::suspend_for_focus() {
         case State::Buffering:
         case State::Playing:
             state_ = State::Recovering;
-            ++recovery_generation_;
+            recovery_generation_.fetch_add(1, std::memory_order_acq_rel);
             return true;
         case State::Recovering:
             return true;
@@ -56,7 +56,7 @@ bool PlaybackRecoveryState::begin_recovery() {
         case State::Buffering:
         case State::Playing:
             state_ = State::Recovering;
-            ++recovery_generation_;
+            recovery_generation_.fetch_add(1, std::memory_order_acq_rel);
             return true;
         default:
             return false;

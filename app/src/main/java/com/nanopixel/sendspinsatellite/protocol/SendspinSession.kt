@@ -1,6 +1,7 @@
 package com.nanopixel.sendspinsatellite.protocol
 
 import android.content.Context
+import com.nanopixel.sendspinsatellite.playback.ArtworkSnapshot
 import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -14,6 +15,7 @@ class SendspinSession(
         fun onState(state: SessionState)
         fun onDiagnostics(diagnostics: Diagnostics)
         fun onNowPlaying(snapshot: NowPlayingSnapshot)
+        fun onArtwork(snapshot: ArtworkSnapshot)
     }
 
     enum class SessionState {
@@ -41,6 +43,7 @@ class SendspinSession(
     private val poller = Executors.newSingleThreadScheduledExecutor()
     private var lastState: NativePlaybackEngine.State? = null
     private var lastNowPlayingRevision = -1L
+    private var lastArtworkRevision = -1L
 
     init {
         poller.scheduleAtFixedRate(::publishFastState, 0, 250, TimeUnit.MILLISECONDS)
@@ -75,6 +78,7 @@ class SendspinSession(
     private fun publishFastState() {
         publishState()
         publishNowPlaying()
+        publishArtwork()
     }
 
     private fun publishState() {
@@ -106,5 +110,11 @@ class SendspinSession(
         val snapshot = engine.nowPlayingIfChanged(lastNowPlayingRevision) ?: return
         lastNowPlayingRevision = snapshot.revision
         listener.onNowPlaying(snapshot)
+    }
+
+    private fun publishArtwork() {
+        val snapshot = engine.artworkIfChanged(lastArtworkRevision) ?: return
+        lastArtworkRevision = snapshot.revision
+        listener.onArtwork(snapshot)
     }
 }

@@ -21,6 +21,10 @@ add_library(now_playing_state STATIC now_playing_state.cpp)
 target_compile_features(now_playing_state PUBLIC cxx_std_20)
 target_include_directories(now_playing_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+add_library(artwork_state STATIC artwork_state.cpp)
+target_compile_features(artwork_state PUBLIC cxx_std_20)
+target_include_directories(artwork_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 if(ANDROID)
     find_package(oboe REQUIRED CONFIG)
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -28,7 +32,7 @@ if(ANDROID)
     set(SENDSPIN_ENABLE_CONTROLLER OFF CACHE BOOL "" FORCE)
     set(SENDSPIN_ENABLE_METADATA ON CACHE BOOL "" FORCE)
     set(SENDSPIN_ENABLE_COLOR OFF CACHE BOOL "" FORCE)
-    set(SENDSPIN_ENABLE_ARTWORK OFF CACHE BOOL "" FORCE)
+    set(SENDSPIN_ENABLE_ARTWORK ON CACHE BOOL "" FORCE)
     set(SENDSPIN_ENABLE_VISUALIZER OFF CACHE BOOL "" FORCE)
     add_subdirectory(third_party/sendspin-cpp EXCLUDE_FROM_ALL)
 
@@ -37,7 +41,7 @@ if(ANDROID)
         native_playback_engine.cpp
         oboe_pcm_output.cpp
         sendspin_pcm_listener.cpp)
-    target_link_libraries(sendspin_native PRIVATE clock_filter pcm_render_fifo playback_recovery_state reconnect_policy now_playing_state oboe::oboe sendspin)
+    target_link_libraries(sendspin_native PRIVATE clock_filter pcm_render_fifo playback_recovery_state reconnect_policy now_playing_state artwork_state oboe::oboe sendspin)
     target_compile_features(sendspin_native PRIVATE cxx_std_20)
 endif()
 
@@ -67,6 +71,10 @@ if(NOT ANDROID)
         add_executable(now_playing_state_test now_playing_state_test.cpp)
         target_link_libraries(now_playing_state_test PRIVATE now_playing_state)
         add_test(NAME now_playing_state_test COMMAND now_playing_state_test)
+
+        add_executable(artwork_state_test artwork_state_test.cpp)
+        target_link_libraries(artwork_state_test PRIVATE artwork_state)
+        add_test(NAME artwork_state_test COMMAND artwork_state_test)
 
         add_executable(playback_soak_test playback_soak_test.cpp)
         target_link_libraries(playback_soak_test PRIVATE reconnect_policy playback_recovery_state pcm_render_fifo)

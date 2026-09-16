@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <mutex>
 #include <optional>
@@ -8,10 +9,12 @@
 #include <thread>
 
 #include <sendspin/client.h>
+#include <sendspin/artwork_role.h>
 #include <sendspin/metadata_role.h>
 #include <sendspin/player_role.h>
 
 #include "now_playing_state.h"
+#include "artwork_state.h"
 #include "oboe_pcm_output.h"
 #include "playback_recovery_state.h"
 #include "reconnect_policy.h"
@@ -21,7 +24,8 @@ namespace sendspin {
 
 class NativePlaybackEngine final : public SendspinClientListener,
                                    public SendspinNetworkProvider,
-                                   public MetadataRoleListener {
+                                   public MetadataRoleListener,
+                                   public ArtworkRoleListener {
 public:
     using State = PlaybackRecoveryState::State;
     NativePlaybackEngine(std::string client_id, std::string player_name);
@@ -83,11 +87,17 @@ public:
     [[nodiscard]] Diagnostics diagnostics() const;
     [[nodiscard]] std::optional<NowPlayingState::Snapshot> now_playing_after(
         uint64_t known_revision) const;
+    [[nodiscard]] std::optional<ArtworkState::Snapshot> artwork_after(
+        uint64_t known_revision) const;
     bool is_network_ready() override;
     void on_time_sync_updated(float) override;
     void on_group_update(const GroupUpdateObject&) override;
     void on_metadata(const ServerMetadataStateObject& metadata) override;
     void on_metadata_clear() override;
+    void on_image_decode(uint8_t slot, const uint8_t* data, size_t length,
+                         SendspinImageFormat format) override;
+    void on_image_display(uint8_t slot, uint32_t lateness_ms) override;
+    void on_image_clear(uint8_t slot) override;
 
 private:
     static void on_frames_played(void* context, uint32_t frames);
@@ -108,7 +118,9 @@ private:
     SendspinClient client_;
     PlayerRole& player_;
     MetadataRole& metadata_;
+    ArtworkRole& artwork_;
     NowPlayingState now_playing_;
+    ArtworkState artwork_state_;
     PlaybackRecoveryState recovery_state_;
     ReconnectPolicy reconnect_policy_;
     std::atomic<State> state_{State::Stopped};

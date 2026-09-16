@@ -26,6 +26,18 @@ PlayerRoleConfig player_config() {
     config.min_buffer_ms = 1000;
     return config;
 }
+ArtworkRoleConfig artwork_config() {
+    ArtworkRoleConfig config;
+    config.preferred_formats = {{
+        SendspinImageSource::ALBUM,
+        SendspinImageFormat::JPEG,
+        512,
+        512,
+        false,
+        0,
+    }};
+    return config;
+}
 int64_t monotonic_us() {
     return std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -41,11 +53,13 @@ NativePlaybackEngine::NativePlaybackEngine(std::string client_id, std::string pl
     : listener_(output_, &NativePlaybackEngine::on_stream_started, this),
       client_(client_config(client_id, player_name)),
       player_(client_.add_player(player_config())),
-      metadata_(client_.add_metadata()) {
+      metadata_(client_.add_metadata()),
+      artwork_(client_.add_artwork(artwork_config())) {
     client_.set_listener(this);
     client_.set_network_provider(this);
     player_.set_listener(&listener_);
     metadata_.set_listener(this);
+    artwork_.set_listener(this);
     output_.set_playback_observer(&NativePlaybackEngine::on_frames_played, this);
 }
 NativePlaybackEngine::~NativePlaybackEngine() {
@@ -56,10 +70,13 @@ NativePlaybackEngine::~NativePlaybackEngine() {
 }
 bool NativePlaybackEngine::connect(std::string url) {
     if (url.empty() || !output_.start()) {
+        now_playing_.clear_all_current_generation();
+        artwork_state_.clear_all_current_generation();
         state_.store(State::Error, std::memory_order_release);
         return false;
     }
     now_playing_.clear_all_current_generation();
+    artwork_state_.clear_all_current_generation();
     {
         std::lock_guard lock(control_mutex_);
         pending_url_ = std::move(url);
@@ -73,6 +90,7 @@ bool NativePlaybackEngine::connect(std::string url) {
 }
 void NativePlaybackEngine::disconnect() {
     now_playing_.clear_all_current_generation();
+    artwork_state_.clear_all_current_generation();
     std::lock_guard lock(control_mutex_);
     pending_url_.clear();
     disconnect_requested_ = true;
@@ -98,6 +116,10 @@ NativePlaybackEngine::Diagnostics NativePlaybackEngine::diagnostics() const {
 std::optional<NowPlayingState::Snapshot> NativePlaybackEngine::now_playing_after(
     const uint64_t known_revision) const {
     return now_playing_.snapshot_after(known_revision);
+}
+std::optional<ArtworkState::Snapshot> NativePlaybackEngine::artwork_after(
+    const uint64_t known_revision) const {
+    return artwork_state_.snapshot_after(known_revision);
 }
 bool NativePlaybackEngine::is_network_ready() {
     return network_available_.load(std::memory_order_acquire);
@@ -150,6 +172,27 @@ void NativePlaybackEngine::on_metadata(const ServerMetadataStateObject& metadata
 }
 void NativePlaybackEngine::on_metadata_clear() {
     now_playing_.clear_metadata(recovery_state_.recovery_generation());
+    artwork_state_.clear(recovery_state_.recovery_generation());
+}
+void NativePlaybackEngine::on_image_decode(
+    const uint8_t slot, const uint8_t* data, const size_t length,
+    const SendspinImageFormat format) {
+    if (slot != 0) return;
+
+    const auto generation = recovery_state_.recovery_generation();
+    artwork_state_.stage(
+        generation,
+        data,
+        length,
+        format == SendspinImageFormat::JPEG);
+}
+void NativePlaybackEngine::on_image_display(const uint8_t slot, const uint32_t) {
+    if (slot != 0) return;
+    artwork_state_.display(recovery_state_.recovery_generation());
+}
+void NativePlaybackEngine::on_image_clear(const uint8_t slot) {
+    if (slot != 0) return;
+    artwork_state_.clear(recovery_state_.recovery_generation());
 }
 void NativePlaybackEngine::on_frames_played(void* context, uint32_t frames) {
     auto* engine = static_cast<NativePlaybackEngine*>(context);
@@ -265,6 +308,7 @@ void NativePlaybackEngine::run() {
             focus_suspended = true;
             if (recovery_state_.suspend_for_focus()) {
                 now_playing_.clear_all(recovery_state_.recovery_generation());
+                artwork_state_.clear_all(recovery_state_.recovery_generation());
                 reconnect_policy_.cancel();
                 reconnect_attempt_active_ = false;
                 output_.stop();
@@ -305,6 +349,7 @@ void NativePlaybackEngine::run() {
             if (began_recovery || already_recovering) {
                 if (began_recovery) {
                     now_playing_.clear_all(recovery_state_.recovery_generation());
+                    artwork_state_.clear_all(recovery_state_.recovery_generation());
                 }
                 if (has_cause(recovery_causes,
                               PlaybackRecoveryState::RecoveryCause::NetworkLost)) {
@@ -393,6 +438,7 @@ void NativePlaybackEngine::run() {
             const bool began_recovery = recovery_state_.begin_recovery();
             if (began_recovery) {
                 now_playing_.clear_all(recovery_state_.recovery_generation());
+                artwork_state_.clear_all(recovery_state_.recovery_generation());
                 record_hard_resync();
                 publish_state();
             }

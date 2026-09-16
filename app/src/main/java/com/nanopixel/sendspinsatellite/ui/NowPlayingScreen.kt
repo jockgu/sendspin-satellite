@@ -1,8 +1,14 @@
 package com.nanopixel.sendspinsatellite.ui
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,6 +17,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,8 +27,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -29,7 +44,10 @@ import androidx.compose.ui.unit.dp
 import com.nanopixel.sendspinsatellite.connection.ConnectionState
 import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
 import com.nanopixel.sendspinsatellite.connection.SavedServer
+import com.nanopixel.sendspinsatellite.playback.ArtworkSnapshot
 import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val generatedIdentifierSuffix = Regex(
     """\s+\([0-9a-f]{8}-[a-z0-9-]+\)$""",
@@ -159,6 +177,7 @@ internal fun NowPlayingScreen(
     onSettings: () -> Unit,
     onReconnect: () -> Unit,
     onDisconnect: () -> Unit,
+    artwork: ArtworkSnapshot = ArtworkSnapshot(),
 ) {
     Column(
         modifier = Modifier
@@ -192,6 +211,7 @@ internal fun NowPlayingScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            AlbumArtwork(artwork)
             if (presentation.showConnectionProgress) {
                 CircularProgressIndicator()
             }
@@ -272,6 +292,83 @@ internal fun NowPlayingScreen(
             }
         }
     }
+}
+
+@Composable
+private fun AlbumArtwork(snapshot: ArtworkSnapshot) {
+    var bitmap by remember(
+        snapshot.revision,
+        snapshot.generation,
+    ) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(snapshot.revision, snapshot.generation) {
+        bitmap = decodeArtwork(snapshot.encodedJpeg)
+    }
+
+    Box(
+        modifier = Modifier
+            .widthIn(max = 360.dp)
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        val currentBitmap = bitmap
+        if (currentBitmap == null) {
+            Icon(
+                Icons.Outlined.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Image(
+                bitmap = currentBitmap.asImageBitmap(),
+                contentDescription = "Album artwork",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+private const val MAX_ARTWORK_DIMENSION = 512
+private const val MAX_ARTWORK_SOURCE_DIMENSION = 8192
+
+internal suspend fun decodeArtwork(encodedJpeg: ByteArray?): Bitmap? = withContext(Dispatchers.Default) {
+    val bytes = encodedJpeg ?: return@withContext null
+    if (bytes.isEmpty()) return@withContext null
+
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    try {
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    } catch (_: IllegalArgumentException) {
+        return@withContext null
+    }
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0 ||
+        bounds.outWidth > MAX_ARTWORK_SOURCE_DIMENSION ||
+        bounds.outHeight > MAX_ARTWORK_SOURCE_DIMENSION
+    ) {
+        return@withContext null
+    }
+
+    var sampleSize = 1
+    while (bounds.outWidth / sampleSize > MAX_ARTWORK_DIMENSION ||
+        bounds.outHeight / sampleSize > MAX_ARTWORK_DIMENSION
+    ) {
+        sampleSize *= 2
+    }
+    val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+    val bitmap = try {
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+    if (bitmap == null || maxOf(bitmap.width, bitmap.height) > MAX_ARTWORK_DIMENSION) {
+        bitmap?.recycle()
+        return@withContext null
+    }
+    bitmap
 }
 
 @Preview(showBackground = true)

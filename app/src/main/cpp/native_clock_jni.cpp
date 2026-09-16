@@ -172,6 +172,41 @@ jobject now_playing_snapshot(
     return result;
 }
 
+jobject artwork_snapshot(JNIEnv* env, const sendspin::ArtworkState::Snapshot& snapshot) {
+    const auto snapshot_class = env->FindClass(
+        "com/nanopixel/sendspinsatellite/playback/ArtworkSnapshot");
+    if (snapshot_class == nullptr) return nullptr;
+    const auto constructor = env->GetMethodID(snapshot_class, "<init>", "(JJ[B)V");
+    if (constructor == nullptr) {
+        env->DeleteLocalRef(snapshot_class);
+        return nullptr;
+    }
+
+    jbyteArray encoded_jpeg = nullptr;
+    if (!snapshot.encoded_jpeg.empty()) {
+        encoded_jpeg = env->NewByteArray(static_cast<jsize>(snapshot.encoded_jpeg.size()));
+        if (encoded_jpeg == nullptr) {
+            env->DeleteLocalRef(snapshot_class);
+            return nullptr;
+        }
+        env->SetByteArrayRegion(
+            encoded_jpeg,
+            0,
+            static_cast<jsize>(snapshot.encoded_jpeg.size()),
+            reinterpret_cast<const jbyte*>(snapshot.encoded_jpeg.data()));
+    }
+
+    const auto result = env->NewObject(
+        snapshot_class,
+        constructor,
+        static_cast<jlong>(snapshot.revision),
+        static_cast<jlong>(snapshot.generation),
+        encoded_jpeg);
+    if (encoded_jpeg != nullptr) env->DeleteLocalRef(encoded_jpeg);
+    env->DeleteLocalRef(snapshot_class);
+    return result;
+}
+
 }  // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
@@ -336,4 +371,13 @@ Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeNowPlay
         static_cast<uint64_t>(known_revision));
     if (!snapshot.has_value()) return nullptr;
     return now_playing_snapshot(env, *snapshot);
+}
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeArtworkIfChanged(
+    JNIEnv* env, jclass, jlong handle, jlong known_revision) {
+    const auto snapshot = reinterpret_cast<NativePlaybackEngine*>(handle)->artwork_after(
+        static_cast<uint64_t>(known_revision));
+    if (!snapshot.has_value()) return nullptr;
+    return artwork_snapshot(env, *snapshot);
 }

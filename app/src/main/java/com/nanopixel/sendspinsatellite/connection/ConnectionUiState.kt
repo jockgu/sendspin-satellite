@@ -1,6 +1,7 @@
 package com.nanopixel.sendspinsatellite.connection
 
 import com.nanopixel.sendspinsatellite.playback.AlphaAudioDiagnostics
+import com.nanopixel.sendspinsatellite.playback.ArtworkSnapshot
 import com.nanopixel.sendspinsatellite.playback.DiscoveredServer
 import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
 
@@ -32,4 +33,5 @@ data class ConnectionUiState(
     val audioDiagnostics: AlphaAudioDiagnostics? = null,
     val discoveredServers: List<DiscoveredServer> = emptyList(),
     val nowPlaying: NowPlayingSnapshot = NowPlayingSnapshot(),
+    val artwork: ArtworkSnapshot = ArtworkSnapshot(),
 )
