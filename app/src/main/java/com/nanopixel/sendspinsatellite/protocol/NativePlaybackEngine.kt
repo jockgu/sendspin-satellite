@@ -2,6 +2,8 @@ package com.nanopixel.sendspinsatellite.protocol
 
 import android.content.Context
 import android.provider.Settings
+import com.nanopixel.sendspinsatellite.playback.ArtworkSnapshot
+import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
 
 class NativePlaybackEngine(
     context: Context,
@@ -51,6 +53,14 @@ class NativePlaybackEngine(
             outputBufferCapacityFrames = values[28].toInt(),
             outputXruns = values[29].toInt(),
         )
+    }
+    fun nowPlayingIfChanged(knownRevision: Long): NowPlayingSnapshot? {
+        if (handle == 0L) return null
+        return nativeNowPlayingIfChanged(requireOpen(), knownRevision)
+    }
+    fun artworkIfChanged(knownRevision: Long): ArtworkSnapshot? {
+        if (handle == 0L) return null
+        return nativeArtworkIfChanged(requireOpen(), knownRevision)
     }
     fun requestOutputRecovery() {
         if (handle != 0L) nativeRequestRecovery(handle, RECOVERY_CAUSE_ROUTE_CHANGE)
@@ -120,6 +130,14 @@ class NativePlaybackEngine(
         @JvmStatic private external fun nativeDisconnect(handle: Long)
         @JvmStatic private external fun nativeSetNetworkAvailable(handle: Long, available: Boolean)
         @JvmStatic private external fun nativeDiagnostics(handle: Long): LongArray
+        @JvmStatic private external fun nativeNowPlayingIfChanged(
+            handle: Long,
+            knownRevision: Long,
+        ): NowPlayingSnapshot?
+        @JvmStatic private external fun nativeArtworkIfChanged(
+            handle: Long,
+            knownRevision: Long,
+        ): ArtworkSnapshot?
         @JvmStatic private external fun nativeRequestRecovery(handle: Long, cause: Int)
         @JvmStatic private external fun nativeSuspendForFocus(handle: Long)
         @JvmStatic private external fun nativeResumeFromFocus(handle: Long)

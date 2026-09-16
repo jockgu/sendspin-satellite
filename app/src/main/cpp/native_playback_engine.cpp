@@ -26,6 +26,18 @@ PlayerRoleConfig player_config() {
     config.min_buffer_ms = 1000;
     return config;
 }
+ArtworkRoleConfig artwork_config() {
+    ArtworkRoleConfig config;
+    config.preferred_formats = {{
+        SendspinImageSource::ALBUM,
+        SendspinImageFormat::JPEG,
+        512,
+        512,
+        false,
+        0,
+    }};
+    return config;
+}
 int64_t monotonic_us() {
     return std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -35,15 +47,20 @@ bool has_cause(
     const PlaybackRecoveryState::RecoveryCause cause) {
     return (mask & static_cast<PlaybackRecoveryState::RecoveryCauseMask>(cause)) != 0;
 }
+constexpr int64_t kProgressSampleIntervalUs = 1'000'000;
 }  // namespace
 
 NativePlaybackEngine::NativePlaybackEngine(std::string client_id, std::string player_name)
     : listener_(output_, &NativePlaybackEngine::on_stream_started, this),
-    client_(client_config(client_id, player_name)),
-      player_(client_.add_player(player_config())) {
+      client_(client_config(client_id, player_name)),
+      player_(client_.add_player(player_config())),
+      metadata_(client_.add_metadata()),
+      artwork_(client_.add_artwork(artwork_config())) {
     client_.set_listener(this);
     client_.set_network_provider(this);
     player_.set_listener(&listener_);
+    metadata_.set_listener(this);
+    artwork_.set_listener(this);
     output_.set_playback_observer(&NativePlaybackEngine::on_frames_played, this);
 }
 NativePlaybackEngine::~NativePlaybackEngine() {
@@ -54,9 +71,13 @@ NativePlaybackEngine::~NativePlaybackEngine() {
 }
 bool NativePlaybackEngine::connect(std::string url) {
     if (url.empty() || !output_.start()) {
+        now_playing_.clear_all_current_generation();
+        artwork_state_.clear_all_current_generation();
         state_.store(State::Error, std::memory_order_release);
         return false;
     }
+    now_playing_.clear_all_current_generation();
+    artwork_state_.clear_all_current_generation();
     {
         std::lock_guard lock(control_mutex_);
         pending_url_ = std::move(url);
@@ -69,6 +90,8 @@ bool NativePlaybackEngine::connect(std::string url) {
     return true;
 }
 void NativePlaybackEngine::disconnect() {
+    now_playing_.clear_all_current_generation();
+    artwork_state_.clear_all_current_generation();
     std::lock_guard lock(control_mutex_);
     pending_url_.clear();
     disconnect_requested_ = true;
@@ -90,6 +113,14 @@ NativePlaybackEngine::State NativePlaybackEngine::state() const { return state_.
 NativePlaybackEngine::Diagnostics NativePlaybackEngine::diagnostics() const {
     std::lock_guard lock(diagnostics_mutex_);
     return diagnostics_;
+}
+std::optional<NowPlayingState::Snapshot> NativePlaybackEngine::now_playing_after(
+    const uint64_t known_revision) const {
+    return now_playing_.snapshot_after(known_revision);
+}
+std::optional<ArtworkState::Snapshot> NativePlaybackEngine::artwork_after(
+    const uint64_t known_revision) const {
+    return artwork_state_.snapshot_after(known_revision);
 }
 bool NativePlaybackEngine::is_network_ready() {
     return network_available_.load(std::memory_order_acquire);
@@ -113,6 +144,56 @@ void NativePlaybackEngine::on_time_sync_updated(const float error) {
         }
     }
     publish_state();
+}
+void NativePlaybackEngine::on_group_update(const GroupUpdateObject&) {
+    const auto& group = client_.get_group_state();
+    NowPlayingState::Group snapshot;
+    snapshot.name = group.group_name;
+    if (group.playback_state.has_value()) {
+        snapshot.playback_state = *group.playback_state == SendspinPlaybackState::PLAYING
+            ? NowPlayingState::GroupPlaybackState::Playing
+            : NowPlayingState::GroupPlaybackState::Stopped;
+    }
+    now_playing_.update_group(recovery_state_.recovery_generation(), std::move(snapshot));
+}
+void NativePlaybackEngine::on_metadata(const ServerMetadataStateObject& metadata) {
+    NowPlayingState::Metadata snapshot;
+    snapshot.title = metadata.title;
+    snapshot.artist = metadata.artist;
+    snapshot.album_artist = metadata.album_artist;
+    snapshot.album = metadata.album;
+    if (metadata.progress.has_value()) {
+        snapshot.progress = NowPlayingState::Progress{
+            .reported_position_ms = metadata.progress->track_progress,
+            .duration_ms = metadata.progress->track_duration,
+            .playback_speed_milli = metadata.progress->playback_speed,
+        };
+    }
+    now_playing_.update_metadata(recovery_state_.recovery_generation(), std::move(snapshot));
+}
+void NativePlaybackEngine::on_metadata_clear() {
+    now_playing_.clear_metadata(recovery_state_.recovery_generation());
+    artwork_state_.clear(recovery_state_.recovery_generation());
+}
+void NativePlaybackEngine::on_image_decode(
+    const uint8_t slot, const uint8_t* data, const size_t length,
+    const SendspinImageFormat format) {
+    if (slot != 0) return;
+
+    const auto generation = recovery_state_.recovery_generation();
+    artwork_state_.stage(
+        generation,
+        data,
+        length,
+        format == SendspinImageFormat::JPEG);
+}
+void NativePlaybackEngine::on_image_display(const uint8_t slot, const uint32_t) {
+    if (slot != 0) return;
+    artwork_state_.display(recovery_state_.recovery_generation());
+}
+void NativePlaybackEngine::on_image_clear(const uint8_t slot) {
+    if (slot != 0) return;
+    artwork_state_.clear(recovery_state_.recovery_generation());
 }
 void NativePlaybackEngine::on_frames_played(void* context, uint32_t frames) {
     auto* engine = static_cast<NativePlaybackEngine*>(context);
@@ -200,6 +281,7 @@ void NativePlaybackEngine::run() {
     bool focus_suspended = false;
     bool had_connection = false;
     bool was_network_available = network_available_.load(std::memory_order_acquire);
+    int64_t next_progress_sample_us = 0;
     while (running_.load(std::memory_order_acquire)) {
         const auto now_us = monotonic_us();
         if (output_.take_error_recovery_request()) {
@@ -227,6 +309,8 @@ void NativePlaybackEngine::run() {
         if (focus_suspend_requested && !focus_suspended) {
             focus_suspended = true;
             if (recovery_state_.suspend_for_focus()) {
+                now_playing_.clear_all(recovery_state_.recovery_generation());
+                artwork_state_.clear_all(recovery_state_.recovery_generation());
                 reconnect_policy_.cancel();
                 reconnect_attempt_active_ = false;
                 output_.stop();
@@ -265,6 +349,10 @@ void NativePlaybackEngine::run() {
                 recovery_state_.state() == PlaybackRecoveryState::State::Recovering;
             const bool began_recovery = recovery_state_.begin_recovery();
             if (began_recovery || already_recovering) {
+                if (began_recovery) {
+                    now_playing_.clear_all(recovery_state_.recovery_generation());
+                    artwork_state_.clear_all(recovery_state_.recovery_generation());
+                }
                 if (has_cause(recovery_causes,
                               PlaybackRecoveryState::RecoveryCause::NetworkLost)) {
                     record_failure(Failure::NetworkUnavailable);
@@ -341,6 +429,15 @@ void NativePlaybackEngine::run() {
             publish_state();
         }
         const bool connected = client_.is_connected();
+        const auto progress_sample_now_us = monotonic_us();
+        if (connected && progress_sample_now_us >= next_progress_sample_us) {
+            next_progress_sample_us = progress_sample_now_us + kProgressSampleIntervalUs;
+            if (metadata_.get_track_duration_ms() > 0) {
+                now_playing_.update_interpolated_progress(
+                    recovery_state_.recovery_generation(),
+                    metadata_.get_track_progress_ms());
+            }
+        }
         if (had_connection && !connected) {
             recovery_state_.request_recovery(
                 PlaybackRecoveryState::RecoveryCause::TransportLost);
@@ -351,6 +448,8 @@ void NativePlaybackEngine::run() {
             output_.clear();
             const bool began_recovery = recovery_state_.begin_recovery();
             if (began_recovery) {
+                now_playing_.clear_all(recovery_state_.recovery_generation());
+                artwork_state_.clear_all(recovery_state_.recovery_generation());
                 record_hard_resync();
                 publish_state();
             }

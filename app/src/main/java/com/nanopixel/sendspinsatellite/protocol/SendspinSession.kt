@@ -1,6 +1,8 @@
 package com.nanopixel.sendspinsatellite.protocol
 
 import android.content.Context
+import com.nanopixel.sendspinsatellite.playback.ArtworkSnapshot
+import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -12,9 +14,21 @@ class SendspinSession(
     interface Listener {
         fun onState(state: SessionState)
         fun onDiagnostics(diagnostics: Diagnostics)
+        fun onNowPlaying(snapshot: NowPlayingSnapshot)
+        fun onArtwork(snapshot: ArtworkSnapshot)
     }
 
-    enum class SessionState { CONNECTING, HANDSHAKING, SYNCHRONISING, SYNCHRONISED, RECOVERING, DISCONNECTED, ERROR }
+    enum class SessionState {
+        CONNECTING,
+        HANDSHAKING,
+        SYNCHRONISING,
+        SYNCHRONISED,
+        BUFFERING,
+        PLAYING,
+        RECOVERING,
+        DISCONNECTED,
+        ERROR,
+    }
 
     data class Diagnostics(
         val serverName: String? = null,
@@ -28,9 +42,11 @@ class SendspinSession(
     private val engine = NativePlaybackEngine(context, playerName)
     private val poller = Executors.newSingleThreadScheduledExecutor()
     private var lastState: NativePlaybackEngine.State? = null
+    private var lastNowPlayingRevision = -1L
+    private var lastArtworkRevision = -1L
 
     init {
-        poller.scheduleAtFixedRate(::publishState, 0, 250, TimeUnit.MILLISECONDS)
+        poller.scheduleAtFixedRate(::publishFastState, 0, 250, TimeUnit.MILLISECONDS)
         poller.scheduleAtFixedRate(::publishDiagnostics, 0, 1, TimeUnit.SECONDS)
     }
 
@@ -59,6 +75,12 @@ class SendspinSession(
         engine.close()
     }
 
+    private fun publishFastState() {
+        publishState()
+        publishNowPlaying()
+        publishArtwork()
+    }
+
     private fun publishState() {
         val state = engine.state()
         if (state == lastState) return
@@ -67,9 +89,9 @@ class SendspinSession(
             NativePlaybackEngine.State.STOPPED -> listener.onState(SessionState.DISCONNECTED)
             NativePlaybackEngine.State.CONNECTING -> listener.onState(SessionState.CONNECTING)
             NativePlaybackEngine.State.SYNCHRONISING -> listener.onState(SessionState.SYNCHRONISING)
-            NativePlaybackEngine.State.READY,
-            NativePlaybackEngine.State.BUFFERING,
-            NativePlaybackEngine.State.PLAYING -> listener.onState(SessionState.SYNCHRONISED)
+            NativePlaybackEngine.State.READY -> listener.onState(SessionState.SYNCHRONISED)
+            NativePlaybackEngine.State.BUFFERING -> listener.onState(SessionState.BUFFERING)
+            NativePlaybackEngine.State.PLAYING -> listener.onState(SessionState.PLAYING)
             NativePlaybackEngine.State.RECOVERING -> listener.onState(SessionState.RECOVERING)
             NativePlaybackEngine.State.ERROR -> {
                 listener.onState(SessionState.ERROR)
@@ -82,5 +104,17 @@ class SendspinSession(
         val snapshot = engine.diagnostics() ?: return
         if (snapshot.state == NativePlaybackEngine.State.STOPPED) return
         listener.onDiagnostics(Diagnostics(nativeSnapshot = snapshot))
+    }
+
+    private fun publishNowPlaying() {
+        val snapshot = engine.nowPlayingIfChanged(lastNowPlayingRevision) ?: return
+        lastNowPlayingRevision = snapshot.revision
+        listener.onNowPlaying(snapshot)
+    }
+
+    private fun publishArtwork() {
+        val snapshot = engine.artworkIfChanged(lastArtworkRevision) ?: return
+        lastArtworkRevision = snapshot.revision
+        listener.onArtwork(snapshot)
     }
 }
