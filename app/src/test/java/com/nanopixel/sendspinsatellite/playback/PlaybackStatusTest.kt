@@ -4,6 +4,7 @@ import com.nanopixel.sendspinsatellite.connection.ConnectionState
 import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
 import com.nanopixel.sendspinsatellite.connection.SavedServer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PlaybackStatusTest {
@@ -42,6 +43,21 @@ class PlaybackStatusTest {
         ).toUiState(ConnectionUiState())
 
         assertEquals("Music Assistant", uiState.serverName)
+    }
+
+    @Test
+    fun `active server without a friendly name clears a stale server name`() {
+        val uiState = PlaybackStatus(
+            connectionState = ConnectionState.CONNECTING,
+            server = SavedServer("ws://new/sendspin"),
+        ).toUiState(
+            ConnectionUiState(
+                serverName = "Old server",
+                savedServer = SavedServer("ws://old/sendspin", "Old server"),
+            ),
+        )
+
+        assertNull(uiState.serverName)
     }
 
     @Test

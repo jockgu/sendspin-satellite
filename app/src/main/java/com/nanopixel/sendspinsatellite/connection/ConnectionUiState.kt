@@ -13,6 +13,8 @@ enum class ConnectionState(val label: String) {
     SYNCHRONISING("Synchronising"),
     RECOVERING("Recovering"),
     READY("Synchronised"),
+    BUFFERING("Buffering"),
+    PLAYING("Playing"),
     ERROR("Error"),
 }
 

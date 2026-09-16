@@ -22,7 +22,7 @@ data class PlaybackStatus(
 fun PlaybackStatus.toUiState(current: ConnectionUiState) = current.copy(
     connectionState = connectionState,
     detail = detail,
-    serverName = server?.name ?: serverName,
+    serverName = if (server != null) server.name else serverName,
     roundTripUs = roundTripUs,
     clockOffsetUs = clockOffsetUs,
     clockSamples = clockSamples,

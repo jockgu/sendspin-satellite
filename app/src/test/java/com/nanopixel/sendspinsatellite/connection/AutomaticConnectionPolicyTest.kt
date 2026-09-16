@@ -21,6 +21,8 @@ class AutomaticConnectionPolicyTest {
     fun `active session is not replaced by auto connect`() {
         assertFalse(shouldAutoConnect("ws://server/sendspin", false, ConnectionState.CONNECTING))
         assertFalse(shouldAutoConnect("ws://server/sendspin", false, ConnectionState.READY))
+        assertFalse(shouldAutoConnect("ws://server/sendspin", false, ConnectionState.BUFFERING))
+        assertFalse(shouldAutoConnect("ws://server/sendspin", false, ConnectionState.PLAYING))
         assertTrue(shouldAutoConnect("ws://server/sendspin", false, ConnectionState.ERROR))
     }
 }

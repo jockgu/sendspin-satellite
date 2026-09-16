@@ -3,8 +3,10 @@ package com.nanopixel.sendspinsatellite.ui
 import com.nanopixel.sendspinsatellite.connection.ConnectionState
 import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
 import com.nanopixel.sendspinsatellite.connection.SavedServer
+import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -27,6 +29,8 @@ class NowPlayingPresentationTest {
             ConnectionState.SYNCHRONISING,
             ConnectionState.RECOVERING,
             ConnectionState.READY,
+            ConnectionState.BUFFERING,
+            ConnectionState.PLAYING,
         ).forEach { connectionState ->
             assertTrue(
                 connectionState.name,
@@ -58,81 +62,188 @@ class NowPlayingPresentationTest {
     }
 
     @Test
-    fun `ready presentation preserves shell text and saved server name`() {
+    fun `complete metadata maps to playing presentation with friendly context`() {
         val presentation = ConnectionUiState(
             savedServer = SavedServer("ws://server/sendspin", "Music Assistant"),
-            connectionState = ConnectionState.READY,
+            serverAddress = "ws://server/sendspin",
+            connectionState = ConnectionState.PLAYING,
+            nowPlaying = NowPlayingSnapshot(
+                title = "Track title",
+                artist = "Artist",
+                album = "Album",
+                group = NowPlayingSnapshot.Group(name = "Downstairs"),
+            ),
         ).toNowPlayingPresentation()
 
-        assertEquals(
-            NowPlayingPresentation(
-                title = "Ready to play",
-                message = "This device is connected and ready for music.",
-                serverName = "Music Assistant",
-                showConnectionProgress = false,
-                showReconnect = false,
+        assertEquals("Playing", presentation.status)
+        assertEquals("Track title", presentation.title)
+        assertEquals("Artist", presentation.artist)
+        assertEquals("Album", presentation.album)
+        assertEquals("Downstairs · Music Assistant", presentation.context)
+        assertNull(presentation.emptyState)
+        assertFalse(presentation.showConnectionProgress)
+        assertTrue(presentation.showDisconnect)
+    }
+
+    @Test
+    fun `album artist is used only when artist is absent`() {
+        val withFallback = ConnectionUiState(
+            connectionState = ConnectionState.READY,
+            nowPlaying = NowPlayingSnapshot(
+                title = "Track",
+                albumArtist = "Album artist",
             ),
-            presentation,
+        ).toNowPlayingPresentation()
+        assertEquals("Album artist", withFallback.artist)
+
+        val withArtist = ConnectionUiState(
+            connectionState = ConnectionState.READY,
+            nowPlaying = NowPlayingSnapshot(
+                title = "Track",
+                artist = "Track artist",
+                albumArtist = "Album artist",
+            ),
+        ).toNowPlayingPresentation()
+        assertEquals("Track artist", withArtist.artist)
+    }
+
+    @Test
+    fun `blank metadata rows collapse and ready has a stable empty state`() {
+        val presentation = ConnectionUiState(
+            connectionState = ConnectionState.READY,
+            nowPlaying = NowPlayingSnapshot(
+                title = "  ",
+                artist = "\t",
+                albumArtist = "",
+                album = " ",
+            ),
+        ).toNowPlayingPresentation()
+
+        assertNull(presentation.title)
+        assertNull(presentation.artist)
+        assertNull(presentation.album)
+        assertEquals("Ready", presentation.status)
+        assertEquals("Ready for playback", presentation.emptyState)
+    }
+
+    @Test
+    fun `zero metadata speed reports paused without rendering progress`() {
+        val presentation = ConnectionUiState(
+            connectionState = ConnectionState.PLAYING,
+            nowPlaying = NowPlayingSnapshot(
+                title = "Paused track",
+                progress = NowPlayingSnapshot.Progress(
+                    reportedPositionMs = 12_000,
+                    durationMs = 180_000,
+                    playbackSpeedMilli = 0,
+                ),
+            ),
+        ).toNowPlayingPresentation()
+
+        assertEquals("Paused", presentation.status)
+        assertEquals("Paused track", presentation.title)
+        assertNull(presentation.emptyState)
+    }
+
+    @Test
+    fun `stopped group with a current track reports paused`() {
+        val presentation = ConnectionUiState(
+            connectionState = ConnectionState.PLAYING,
+            nowPlaying = NowPlayingSnapshot(
+                title = "Stopped group track",
+                group = NowPlayingSnapshot.Group(
+                    name = "Kitchen",
+                    playbackState = NowPlayingSnapshot.PlaybackState.STOPPED,
+                ),
+            ),
+        ).toNowPlayingPresentation()
+
+        assertEquals("Paused", presentation.status)
+    }
+
+    @Test
+    fun `buffering and playing statuses preserve their native distinction`() {
+        assertEquals(
+            "Buffering",
+            ConnectionUiState(connectionState = ConnectionState.BUFFERING)
+                .toNowPlayingPresentation()
+                .status,
+        )
+        assertEquals(
+            "Playing",
+            ConnectionUiState(connectionState = ConnectionState.PLAYING)
+                .toNowPlayingPresentation()
+                .status,
         )
     }
 
     @Test
-    fun `connecting presentation shows connection progress`() {
-        assertEquals(
-            NowPlayingPresentation(
-                title = "Connecting…",
-                message = "This should only take a moment.",
-                serverName = null,
-                showConnectionProgress = true,
-                showReconnect = false,
-            ),
-            ConnectionUiState(connectionState = ConnectionState.CONNECTING)
-                .toNowPlayingPresentation(),
-        )
+    fun `connection and recovery presentations retain actions and messages`() {
+        val connecting = ConnectionUiState(
+            connectionState = ConnectionState.CONNECTING,
+        ).toNowPlayingPresentation()
+        assertEquals("Connecting…", connecting.status)
+        assertEquals("This should only take a moment.", connecting.message)
+        assertTrue(connecting.showConnectionProgress)
+        assertTrue(connecting.showDisconnect)
+        assertFalse(connecting.showReconnect)
+
+        val recovering = ConnectionUiState(
+            connectionState = ConnectionState.RECOVERING,
+        ).toNowPlayingPresentation()
+        assertEquals("Recovering…", recovering.status)
+        assertTrue(recovering.showConnectionProgress)
+        assertTrue(recovering.showDisconnect)
+
+        val error = ConnectionUiState(
+            connectionState = ConnectionState.ERROR,
+        ).toNowPlayingPresentation()
+        assertEquals("Couldn't connect", error.status)
+        assertTrue(error.showReconnect)
+        assertFalse(error.showDisconnect)
+
+        val disconnected = ConnectionUiState(
+            connectionState = ConnectionState.DISCONNECTED,
+        ).toNowPlayingPresentation()
+        assertEquals("Playback is stopped", disconnected.status)
+        assertTrue(disconnected.showReconnect)
+        assertFalse(disconnected.showDisconnect)
     }
 
     @Test
-    fun `recovering presentation shows connection progress without reconnect action`() {
-        assertEquals(
-            NowPlayingPresentation(
-                title = "Reconnecting…",
-                message = "We'll keep trying automatically.",
-                serverName = null,
-                showConnectionProgress = true,
-                showReconnect = false,
+    fun `context omits absent names and does not fall back to another server`() {
+        val groupOnly = ConnectionUiState(
+            connectionState = ConnectionState.READY,
+            nowPlaying = NowPlayingSnapshot(
+                group = NowPlayingSnapshot.Group(name = "Kitchen"),
             ),
-            ConnectionUiState(connectionState = ConnectionState.RECOVERING)
-                .toNowPlayingPresentation(),
-        )
+        ).toNowPlayingPresentation()
+        assertEquals("Kitchen", groupOnly.context)
+
+        val serverOnly = ConnectionUiState(
+            serverName = "Music Assistant",
+            connectionState = ConnectionState.READY,
+        ).toNowPlayingPresentation()
+        assertEquals("Music Assistant", serverOnly.context)
+
+        val differentManualServer = ConnectionUiState(
+            savedServer = SavedServer("ws://old/sendspin", "Old server"),
+            serverAddress = "ws://new/sendspin",
+            connectionState = ConnectionState.CONNECTING,
+        ).toNowPlayingPresentation()
+        assertNull(differentManualServer.context)
     }
 
     @Test
-    fun `error presentation shows reconnect action`() {
-        assertEquals(
-            NowPlayingPresentation(
-                title = "Couldn't connect",
-                message = "Check that your server is available, then try again.",
-                serverName = null,
-                showConnectionProgress = false,
-                showReconnect = true,
+    fun `context removes the generated identifier suffix from friendly names`() {
+        val presentation = ConnectionUiState(
+            serverName = "Music Assistant (d5369777-music-assistant)",
+            connectionState = ConnectionState.READY,
+            nowPlaying = NowPlayingSnapshot(
+                group = NowPlayingSnapshot.Group(name = "Kitchen"),
             ),
-            ConnectionUiState(connectionState = ConnectionState.ERROR)
-                .toNowPlayingPresentation(),
-        )
-    }
+        ).toNowPlayingPresentation()
 
-    @Test
-    fun `disconnected presentation shows reconnect action`() {
-        assertEquals(
-            NowPlayingPresentation(
-                title = "Playback is stopped",
-                message = "Open settings to change your server or reconnect.",
-                serverName = null,
-                showConnectionProgress = false,
-                showReconnect = true,
-            ),
-            ConnectionUiState(connectionState = ConnectionState.DISCONNECTED)
-                .toNowPlayingPresentation(),
-        )
+        assertEquals("Kitchen · Music Assistant", presentation.context)
     }
 }

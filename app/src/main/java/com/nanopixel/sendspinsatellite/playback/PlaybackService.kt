@@ -497,7 +497,12 @@ class PlaybackService : Service() {
                 if (generation != sessionGeneration) return
                 diagnosticsCollector.recordEvent("session-state", state.name)
                 val connectionState = state.toConnectionState()
-                if (connectionState == ConnectionState.READY) {
+                if (connectionState in setOf(
+                        ConnectionState.READY,
+                        ConnectionState.BUFFERING,
+                        ConnectionState.PLAYING,
+                    )
+                ) {
                     activeServer?.let(connectionPreferences::saveServer)
                 }
                 publish(status.value.copy(
@@ -676,6 +681,8 @@ class PlaybackService : Service() {
             SendspinSession.SessionState.SYNCHRONISING -> ConnectionState.SYNCHRONISING
             SendspinSession.SessionState.RECOVERING -> ConnectionState.RECOVERING
             SendspinSession.SessionState.SYNCHRONISED -> ConnectionState.READY
+            SendspinSession.SessionState.BUFFERING -> ConnectionState.BUFFERING
+            SendspinSession.SessionState.PLAYING -> ConnectionState.PLAYING
             SendspinSession.SessionState.DISCONNECTED -> ConnectionState.DISCONNECTED
             SendspinSession.SessionState.ERROR -> ConnectionState.ERROR
         }
@@ -686,6 +693,8 @@ class PlaybackService : Service() {
             SendspinSession.SessionState.SYNCHRONISING -> "Measuring the server clock."
             SendspinSession.SessionState.RECOVERING -> "Recovering audio playback."
             SendspinSession.SessionState.SYNCHRONISED -> "Clock synchronised. Native PCM playback is ready."
+            SendspinSession.SessionState.BUFFERING -> "Buffering audio playback."
+            SendspinSession.SessionState.PLAYING -> "Playing audio."
             SendspinSession.SessionState.DISCONNECTED -> "Disconnected from Sendspin server."
             SendspinSession.SessionState.ERROR -> "The Sendspin connection failed."
         }

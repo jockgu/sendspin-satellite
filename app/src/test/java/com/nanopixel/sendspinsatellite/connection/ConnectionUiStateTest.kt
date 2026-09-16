@@ -13,5 +13,7 @@ class ConnectionUiStateTest {
     fun `states use concise player-facing labels`() {
         assertEquals("Synchronising", ConnectionState.SYNCHRONISING.label)
         assertEquals("Synchronised", ConnectionState.READY.label)
+        assertEquals("Buffering", ConnectionState.BUFFERING.label)
+        assertEquals("Playing", ConnectionState.PLAYING.label)
     }
 }

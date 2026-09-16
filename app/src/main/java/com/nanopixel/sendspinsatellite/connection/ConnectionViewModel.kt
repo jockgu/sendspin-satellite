@@ -30,7 +30,12 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     init {
         viewModelScope.launch {
             PlaybackService.state.collect { status ->
-                if (status.connectionState == ConnectionState.READY) {
+                if (status.connectionState in setOf(
+                        ConnectionState.READY,
+                        ConnectionState.BUFFERING,
+                        ConnectionState.PLAYING,
+                    )
+                ) {
                     automaticConnectionAttempted = false
                 }
                 if (automaticConnectionAttempted && status.connectionState == ConnectionState.ERROR) {
@@ -40,7 +45,12 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
                     automaticConnectionAttempted = false
                     return@collect
                 }
-                val preferredServer = if (status.connectionState == ConnectionState.READY) {
+                val preferredServer = if (status.connectionState in setOf(
+                        ConnectionState.READY,
+                        ConnectionState.BUFFERING,
+                        ConnectionState.PLAYING,
+                    )
+                ) {
                     preferences.savedServer()
                 } else {
                     _uiState.value.savedServer

@@ -62,6 +62,7 @@ fun SendspinSatelliteApp(
                     presentation = state.toNowPlayingPresentation(),
                     onSettings = { showSettings = true },
                     onReconnect = onConnect,
+                    onDisconnect = onDisconnect,
                 )
 
                 else -> ConnectionScreen(

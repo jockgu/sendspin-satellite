@@ -16,7 +16,17 @@ class SendspinSession(
         fun onNowPlaying(snapshot: NowPlayingSnapshot)
     }
 
-    enum class SessionState { CONNECTING, HANDSHAKING, SYNCHRONISING, SYNCHRONISED, RECOVERING, DISCONNECTED, ERROR }
+    enum class SessionState {
+        CONNECTING,
+        HANDSHAKING,
+        SYNCHRONISING,
+        SYNCHRONISED,
+        BUFFERING,
+        PLAYING,
+        RECOVERING,
+        DISCONNECTED,
+        ERROR,
+    }
 
     data class Diagnostics(
         val serverName: String? = null,
@@ -75,9 +85,9 @@ class SendspinSession(
             NativePlaybackEngine.State.STOPPED -> listener.onState(SessionState.DISCONNECTED)
             NativePlaybackEngine.State.CONNECTING -> listener.onState(SessionState.CONNECTING)
             NativePlaybackEngine.State.SYNCHRONISING -> listener.onState(SessionState.SYNCHRONISING)
-            NativePlaybackEngine.State.READY,
-            NativePlaybackEngine.State.BUFFERING,
-            NativePlaybackEngine.State.PLAYING -> listener.onState(SessionState.SYNCHRONISED)
+            NativePlaybackEngine.State.READY -> listener.onState(SessionState.SYNCHRONISED)
+            NativePlaybackEngine.State.BUFFERING -> listener.onState(SessionState.BUFFERING)
+            NativePlaybackEngine.State.PLAYING -> listener.onState(SessionState.PLAYING)
             NativePlaybackEngine.State.RECOVERING -> listener.onState(SessionState.RECOVERING)
             NativePlaybackEngine.State.ERROR -> {
                 listener.onState(SessionState.ERROR)
