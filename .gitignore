@@ -18,3 +18,8 @@ ARCHITECTURE.md
 MEMORY.md
 NORTH_STAR.md
 AGENTS.md
+
+# Private Android signing material — never commit
+*.jks
+*.keystore
+keystore.properties
