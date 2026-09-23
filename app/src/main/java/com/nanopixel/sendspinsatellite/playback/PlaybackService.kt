@@ -26,7 +26,9 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.nanopixel.sendspinsatellite.MainActivity
 import com.nanopixel.sendspinsatellite.R
+import com.nanopixel.sendspinsatellite.connection.ConnectionPreferences
 import com.nanopixel.sendspinsatellite.connection.ConnectionState
+import com.nanopixel.sendspinsatellite.connection.SavedServer
 import com.nanopixel.sendspinsatellite.protocol.NativePlaybackEngine
 import com.nanopixel.sendspinsatellite.protocol.SendspinSession
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +38,8 @@ import kotlinx.coroutines.flow.asStateFlow
 class PlaybackService : Service() {
     private var session: SendspinSession? = null
     private var sessionGeneration = 0L
+    private var activeServer: SavedServer? = null
+    private val connectionPreferences by lazy { ConnectionPreferences(applicationContext) }
     private val audioManager by lazy { getSystemService(AudioManager::class.java) }
     private val connectivityManager by lazy { getSystemService(ConnectivityManager::class.java) }
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
@@ -128,6 +132,10 @@ class PlaybackService : Service() {
             ACTION_CONNECT -> connectToAddress(
                 intent.getStringExtra(EXTRA_SERVER_ADDRESS).orEmpty(),
                 intent.getStringExtra(EXTRA_PLAYER_NAME).orEmpty(),
+                SavedServer(
+                    address = intent.getStringExtra(EXTRA_SERVER_ADDRESS).orEmpty(),
+                    name = intent.getStringExtra(EXTRA_SERVER_NAME),
+                ),
             )
             ACTION_DISCOVER -> discoverServers(intent.getStringExtra(EXTRA_PLAYER_NAME).orEmpty())
             ACTION_SELECT_DISCOVERED -> selectDiscoveredServer(intent.getStringExtra(EXTRA_SERVER_ID).orEmpty())
@@ -139,9 +147,11 @@ class PlaybackService : Service() {
     private fun connectToAddress(
         address: String,
         playerName: String,
+        server: SavedServer = SavedServer(address),
         discoveredServer: DiscoveredServer? = null,
     ) {
         stopDiscoveryResources(clearPlayerName = true)
+        activeServer = server.copy(address = address.trim())
         startPlaybackForeground()
         diagnosticsCollector.reset()
         resetPlatformDiagnostics()
@@ -186,7 +196,7 @@ class PlaybackService : Service() {
         publish(PlaybackStatus(
             connectionState = ConnectionState.CONNECTING,
             detail = "Opening a Sendspin connection.",
-            serverName = discoveredServer?.let { "${it.name} (${it.url})" },
+            server = activeServer,
             audioDiagnostics = diagnosticsCollector.snapshot(),
         ))
         activeSession.connect(address)
@@ -205,6 +215,7 @@ class PlaybackService : Service() {
         shutdownSession()
         abandonAudioFocus()
         stopDiscoveryResources(clearPlayerName = true)
+        activeServer = null
         startPlaybackForeground()
         diagnosticsCollector.reset()
         resetPlatformDiagnostics()
@@ -265,7 +276,12 @@ class PlaybackService : Service() {
             )
             is ServerDiscoveryDecision.AutoConnect -> {
                 val playerName = discoveryPlayerName ?: return
-                connectToAddress(decision.server.url, playerName, decision.server)
+                connectToAddress(
+                    decision.server.url,
+                    playerName,
+                    SavedServer(decision.server.url, decision.server.name),
+                    decision.server,
+                )
             }
             is ServerDiscoveryDecision.Select -> {
                 discoverySelectionTimeout?.let(mainHandler::removeCallbacks)
@@ -288,7 +304,7 @@ class PlaybackService : Service() {
         if (status.value.connectionState != ConnectionState.DISCOVERING) return
         val server = status.value.discoveredServers.firstOrNull { it.id == serverId } ?: return
         val playerName = discoveryPlayerName ?: return
-        connectToAddress(server.url, playerName, server)
+        connectToAddress(server.url, playerName, SavedServer(server.url, server.name), server)
     }
 
     private fun finishDiscovery(detail: String) {
@@ -340,6 +356,7 @@ class PlaybackService : Service() {
         unregisterNetworkCallback()
         shutdownSession()
         abandonAudioFocus()
+        activeServer = null
         publish(PlaybackStatus())
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -479,13 +496,23 @@ class PlaybackService : Service() {
             override fun onState(state: SendspinSession.SessionState) {
                 if (generation != sessionGeneration) return
                 diagnosticsCollector.recordEvent("session-state", state.name)
+                val connectionState = state.toConnectionState()
+                if (connectionState in setOf(
+                        ConnectionState.READY,
+                        ConnectionState.BUFFERING,
+                        ConnectionState.PLAYING,
+                    )
+                ) {
+                    activeServer?.let(connectionPreferences::saveServer)
+                }
                 publish(status.value.copy(
-                    connectionState = state.toConnectionState(),
+                    connectionState = connectionState,
                     detail = if (!validatedNetworkAvailable && state != SendspinSession.SessionState.DISCONNECTED) {
                         "Waiting for a validated network."
                     } else {
                         state.detail()
                     },
+                    server = activeServer,
                     audioDiagnostics = diagnosticsCollector.snapshot(),
                 ))
             }
@@ -510,6 +537,16 @@ class PlaybackService : Service() {
                     audioDiagnostics = audioDiagnostics,
                 ))
                 nativeSnapshot?.let(::logDiagnostics)
+            }
+
+            override fun onNowPlaying(snapshot: NowPlayingSnapshot) {
+                if (generation != sessionGeneration) return
+                publish(status.value.copy(nowPlaying = snapshot), refreshNotification = false)
+            }
+
+            override fun onArtwork(snapshot: ArtworkSnapshot) {
+                if (generation != sessionGeneration) return
+                publish(status.value.copy(artwork = snapshot))
             }
         }).also { session = it }
     }
@@ -581,9 +618,9 @@ class PlaybackService : Service() {
         session = null
     }
 
-    private fun publish(nextStatus: PlaybackStatus) {
+    private fun publish(nextStatus: PlaybackStatus, refreshNotification: Boolean = true) {
         status.value = nextStatus
-        if (isForegroundService) {
+        if (refreshNotification && isForegroundService) {
             getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification())
         }
     }
@@ -633,6 +670,7 @@ class PlaybackService : Service() {
         const val ACTION_STOP = "com.nanopixel.sendspinsatellite.action.STOP"
         const val EXTRA_SERVER_ADDRESS = "server_address"
         const val EXTRA_PLAYER_NAME = "player_name"
+        const val EXTRA_SERVER_NAME = "server_name"
         const val EXTRA_SERVER_ID = "server_id"
         const val NOTIFICATION_CHANNEL_ID = "playback"
         const val NOTIFICATION_ID = 1
@@ -648,6 +686,8 @@ class PlaybackService : Service() {
             SendspinSession.SessionState.SYNCHRONISING -> ConnectionState.SYNCHRONISING
             SendspinSession.SessionState.RECOVERING -> ConnectionState.RECOVERING
             SendspinSession.SessionState.SYNCHRONISED -> ConnectionState.READY
+            SendspinSession.SessionState.BUFFERING -> ConnectionState.BUFFERING
+            SendspinSession.SessionState.PLAYING -> ConnectionState.PLAYING
             SendspinSession.SessionState.DISCONNECTED -> ConnectionState.DISCONNECTED
             SendspinSession.SessionState.ERROR -> ConnectionState.ERROR
         }
@@ -658,17 +698,25 @@ class PlaybackService : Service() {
             SendspinSession.SessionState.SYNCHRONISING -> "Measuring the server clock."
             SendspinSession.SessionState.RECOVERING -> "Recovering audio playback."
             SendspinSession.SessionState.SYNCHRONISED -> "Clock synchronised. Native PCM playback is ready."
+            SendspinSession.SessionState.BUFFERING -> "Buffering audio playback."
+            SendspinSession.SessionState.PLAYING -> "Playing audio."
             SendspinSession.SessionState.DISCONNECTED -> "Disconnected from Sendspin server."
             SendspinSession.SessionState.ERROR -> "The Sendspin connection failed."
         }
 
-        internal fun connect(context: Context, address: String, playerName: String) {
+        internal fun connect(
+            context: Context,
+            address: String,
+            playerName: String,
+            serverName: String? = null,
+        ) {
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, PlaybackService::class.java)
                     .setAction(ACTION_CONNECT)
                     .putExtra(EXTRA_SERVER_ADDRESS, address)
-                    .putExtra(EXTRA_PLAYER_NAME, playerName),
+                    .putExtra(EXTRA_PLAYER_NAME, playerName)
+                    .putExtra(EXTRA_SERVER_NAME, serverName),
             )
         }
 
