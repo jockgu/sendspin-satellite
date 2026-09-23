@@ -28,4 +28,4 @@ Run these checks on a real Android device connected to the same local network as
 
 ## Final smoke test
 
-- [ ] Leave the device connected and playing for at least 30 minutes with the screen off; confirm continuous playback and no unexpected disconnect.
+- [x] Leave the device connected and playing for at least 30 minutes with the screen off; confirm continuous playback and no unexpected disconnect.

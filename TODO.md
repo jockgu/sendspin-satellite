@@ -312,19 +312,19 @@ release/device matrix rather than permanent debug UI.
 Goal: make room for the screen without turning `SendspinSatelliteApp.kt` into a
 second monolith.
 
-- [ ] Keep `SendspinSatelliteApp.kt` as the small root that selects the active
+- [x] Keep `SendspinSatelliteApp.kt` as the small root that selects the active
   screen and owns the diagnostics destination and server-selection dialog.
-- [ ] Move the existing address, discovery, player-name, and connect controls
+- [x] Move the existing address, discovery, player-name, and connect controls
   into `ConnectionScreen.kt` with no behavioural redesign.
-- [ ] Add `NowPlayingScreen.kt` for an active session. Show it while connecting,
+- [x] Add `NowPlayingScreen.kt` for an active session. Show it while connecting,
   synchronising, ready, buffering/playing, or recovering so a transient failure
   does not throw the user back into setup.
-- [ ] Use a small pure mapper from `ConnectionUiState` to a presentation model
+- [x] Use a small pure mapper from `ConnectionUiState` to a presentation model
   so missing-field fallbacks and status wording can be unit tested without
   Compose or Android.
-- [ ] Add previews for disconnected setup, connecting, complete metadata,
+- [x] Add previews for disconnected setup, connecting, complete metadata,
   partial/no metadata, long text, recovery, and a wide/landscape layout.
-- [ ] Do not add Navigation Compose or another UI dependency for this two-screen
+- [x] Do not add Navigation Compose or another UI dependency for this two-screen
   switch.
 
 **Gate:** The app looks and behaves exactly as before when disconnected. An
@@ -335,21 +335,21 @@ and Disconnect remain reachable, and rotation/recreation preserves the screen.
 
 Goal: ship useful now-playing information without waiting for image handling.
 
-- [ ] Show a concise status such as Ready, Buffering, Playing, Paused, or
+- [x] Show a concise status such as Ready, Buffering, Playing, Paused, or
   Recovering. Derive it from native playback state, group state, and metadata
   playback speed rather than inventing another independent state machine.
-- [ ] Render title as the primary line, artist as the secondary line, and album
+- [x] Render title as the primary line, artist as the secondary line, and album
   as a quieter tertiary line. Collapse absent rows; use album artist only when
   artist is absent.
-- [ ] When metadata is absent, show a stable "Ready for playback" empty state
+- [x] When metadata is absent, show a stable "Ready for playback" empty state
   rather than blank labels or stale content.
-- [ ] Show group and server names in one compact context line when present. Do
+- [x] Show group and server names in one compact context line when present. Do
   not show IDs or raw addresses.
-- [ ] Keep Disconnect visually secondary and keep the Audio diagnostics icon
+- [x] Keep Disconnect visually secondary and keep the Audio diagnostics icon
   available.
-- [ ] Constrain long metadata with sensible line limits and ellipsis; provide
+- [x] Constrain long metadata with sensible line limits and ellipsis; provide
   semantic descriptions and touch targets suitable for accessibility.
-- [ ] Adapt the layout for narrow portrait and wide/landscape screens using
+- [x] Adapt the layout for narrow portrait and wide/landscape screens using
   Compose layout primitives already in the project.
 
 **Gate:** Title/artist/album and state remain readable on the smallest supported
@@ -361,22 +361,22 @@ long metadata. No setup field appears during an active session.
 Goal: add artwork without adding an independent network path or threatening
 long-running playback.
 
-- [ ] Enable `SENDSPIN_ENABLE_ARTWORK` and register exactly one album-art
+- [x] Enable `SENDSPIN_ENABLE_ARTWORK` and register exactly one album-art
   channel using JPEG at a fixed, modest size (start with 512 x 512). Do not add
   artist art or responsive renegotiation yet.
-- [ ] Implement `ArtworkRoleListener` outside the audio callback. Keep only the
+- [x] Implement `ArtworkRoleListener` outside the audio callback. Keep only the
   latest staged image and current displayed image, cap accepted encoded bytes,
   and associate both with the active stream/session generation.
-- [ ] Publish a revision plus encoded bytes through a separate coarse JNI read
+- [x] Publish a revision plus encoded bytes through a separate coarse JNI read
   only when artwork changes; do not copy image data on every state poll.
-- [ ] Decode with Android's `BitmapFactory` off the main thread. Keep only one
+- [x] Decode with Android's `BitmapFactory` off the main thread. Keep only one
   current decoded bitmap and add no image-loading library.
-- [ ] Apply display and clear callbacks in their Sendspin-scheduled order. Clear
+- [x] Apply display and clear callbacks in their Sendspin-scheduled order. Clear
   current and pending art on stream end, metadata/artwork clear, disconnect,
   reconnect, and decode failure.
-- [ ] Add a neutral in-app placeholder that does not imply missing metadata is
+- [x] Add a neutral in-app placeholder that does not imply missing metadata is
   an error. Skip cross-fades and animated backgrounds in the first version.
-- [ ] Add tests for late join, rapid track skip, missing artwork, oversized or
+- [x] Add tests for late join, rapid track skip, missing artwork, oversized or
   undecodable data, clear, disconnect, and an old generation completing after a
   new connection.
 
@@ -389,16 +389,16 @@ recovery.
 
 Goal: add one useful dynamic element after the static screen is stable.
 
-- [ ] Read interpolated progress from the existing native metadata role at a
+- [x] Read interpolated progress from the existing native metadata role at a
   modest cadence (about once per second); do not run a frame-rate ticker.
-- [ ] Show a slim, non-seekable progress bar and elapsed/duration text only when
+- [x] Show a slim, non-seekable progress bar and elapsed/duration text only when
   duration is greater than zero. Omit the row for unlimited or unknown
   duration rather than guessing that the source is live.
-- [ ] Freeze progress when playback speed is zero and apply server corrections
+- [x] Freeze progress when playback speed is zero and apply server corrections
   after pause, resume, or seek without animating backward through stale values.
-- [ ] Keep seeking and transport buttons out of scope; those require the
+- [x] Keep seeking and transport buttons out of scope; those require the
   controller role and its advertised capabilities.
-- [ ] Unit-test duration formatting, bounds, pause/resume, unknown duration,
+- [x] Unit-test duration formatting, bounds, pause/resume, unknown duration,
   seek correction, and track replacement.
 
 **Gate:** Progress tracks a real finite track, pauses, resumes, and corrects
@@ -407,19 +407,19 @@ updates do not increase notification churn or harm battery use.
 
 ### Phase 8.6 — release and maintainability gate
 
-- [ ] Verify setup, discovery, manual connect, disconnect, diagnostics, recovery,
+- [x] Verify setup, discovery, manual connect, disconnect, diagnostics, recovery,
   and foreground-service behaviour still work with metadata absent or roles
   declined by the server.
-- [ ] Exercise track changes, natural gapless transitions, pause/resume, seek,
+- [x] Exercise track changes, natural gapless transitions, pause/resume, seek,
   playback stop, server restart, Wi-Fi loss, and Activity destruction while
   metadata/artwork is changing.
-- [ ] Run native/unit tests plus a physical-device session on an older or
+- [x] Run native/unit tests plus a physical-device session on an older or
   memory-constrained Android device with the screen on and off.
-- [ ] Confirm UI files have single responsibilities: root routing in
+- [x] Confirm UI files have single responsibilities: root routing in
   `SendspinSatelliteApp.kt`, setup in `ConnectionScreen.kt`, now playing in
   `NowPlayingScreen.kt`, and diagnostics in `AudioDiagnosticsScreen.kt`. Extract
   another component only if it is independently testable or reused.
-- [ ] Revisit deferred fields only with evidence from real use. The likely next
+- [x] Revisit deferred fields only with evidence from real use. The likely next
   independent decision is MediaSession/notification integration, not more
   information on the main screen.
 
@@ -436,61 +436,3 @@ Introduce codecs only after PCM playback is reliable:
 3. FLAC
 
 No PCM data should cross JNI during normal playback.
-
-Phase 9 — Opus codec support
-
-Goal: add reliable Opus playback without compromising the established PCM,
-native timing, bounded-buffer, or allocation-free callback guarantees.
-
-### Discovery and decisions
-
-- [ ] Inspect the pinned `sendspin-cpp` revision for supported Opus negotiation,
-  decoding, stream-clear, error, and packet-loss behaviour.
-- [ ] Verify the exact Sendspin Opus capability fields against a compatible
-  server and record the tested server/library versions.
-- [ ] Decide whether upstream provides a maintained Android-ready `libopus`;
-  document the license, security update owner, ABI support, and dependency
-  pinning plan.
-- [ ] Confirm that upstream delivers decoded 48 kHz/stereo/signed-16 PCM to
-  the listener, or define the bounded native compressed-queue/decode-worker
-  design needed instead.
-- [ ] Define the initial supported profile and explicitly defer any unsupported
-  channel layouts, sample formats, resampling, DSP, or UI controls.
-
-### Native implementation
-
-- [ ] Advertise only verified Opus capabilities, retaining PCM during staged
-  interoperability work.
-- [ ] Extend the native listener/codec boundary without changing the JNI API or
-  allowing PCM through Kotlin.
-- [ ] If required, add a preallocated, bounded compressed-packet queue and
-  non-real-time decode worker that feeds the existing PCM FIFO.
-- [ ] Validate negotiated format metadata and decoder output before render;
-  reject unsupported values deterministically.
-- [ ] Define full-FIFO backpressure so partial writes cannot silently discard
-  a packet tail or corrupt the decoder timeline.
-- [ ] Invalidate compressed and decoded data on stream start/clear, reconnect,
-  format change, decoder reset, output restart, and hard resync.
-- [ ] Route malformed packets and decoder failures through the existing
-  observable bounded recovery state machine.
-
-### Diagnostics and validation
-
-- [ ] Add native diagnostics for selected codec, queue depths, decode activity,
-  decode failures, late/dropped packets, concealment/reset activity, and
-  sampled non-real-time decode cost.
-- [ ] Add host tests for valid/invalid negotiation, malformed/truncated data,
-  queue saturation, loss/jitter/reordering, stream clear, reconnect, and
-  stale-generation rejection.
-- [ ] Extend the simulated soak to assert bounded compressed/decoded queues,
-  no stale frames, recovery convergence, and no counter overflow under Opus
-  traffic.
-- [ ] Run existing native host tests, Android unit tests, and a debug build.
-- [ ] Interoperate with a real supported Sendspin server and confirm PCM
-  fallback still works.
-- [ ] Perform physical-device checks on older hardware and wired, Bluetooth,
-  and USB outputs, including screen-off, Wi-Fi loss, server restart, and route
-  changes.
-- [ ] Record tested server/device results and release only when CPU, thermal,
-  callback-underrun, latency, and recovery outcomes meet the PCM reliability
-  baseline.
