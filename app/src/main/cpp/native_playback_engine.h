@@ -28,7 +28,11 @@ class NativePlaybackEngine final : public SendspinClientListener,
                                    public ArtworkRoleListener {
 public:
     using State = PlaybackRecoveryState::State;
-    NativePlaybackEngine(std::string client_id, std::string player_name);
+    NativePlaybackEngine(
+        std::string client_id,
+        std::string player_name,
+        uint8_t initial_volume,
+        bool initial_muted);
     ~NativePlaybackEngine();
 
     enum class Failure : int32_t {
@@ -73,6 +77,8 @@ public:
         int32_t output_buffer_size_frames{-1};
         int32_t output_buffer_capacity_frames{-1};
         int32_t output_xrun_count{-1};
+        uint8_t player_volume{100};
+        bool player_muted{false};
     };
 
     bool connect(std::string url);

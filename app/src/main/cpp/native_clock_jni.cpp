@@ -1,5 +1,6 @@
 #include <jni.h>
 
+#include <algorithm>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -252,7 +253,12 @@ Java_com_nanopixel_sendspinsatellite_protocol_NativeClockEngine_nativeUpdate(
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeCreate(
-    JNIEnv* env, jclass, jstring client_id, jstring player_name) {
+    JNIEnv* env,
+    jclass,
+    jstring client_id,
+    jstring player_name,
+    jint initial_volume,
+    jboolean initial_muted) {
     if (client_id == nullptr || player_name == nullptr) {
         return 0;
     }
@@ -265,7 +271,9 @@ Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeCreate(
         env->ReleaseStringUTFChars(client_id, client_chars);
         return 0;
     }
-    auto* engine = new NativePlaybackEngine(client_chars, player_chars);
+    const auto volume = static_cast<uint8_t>(std::clamp(initial_volume, 0, 100));
+    auto* engine = new NativePlaybackEngine(
+        client_chars, player_chars, volume, initial_muted == JNI_TRUE);
     env->ReleaseStringUTFChars(player_name, player_chars);
     env->ReleaseStringUTFChars(client_id, client_chars);
     return reinterpret_cast<jlong>(engine);
@@ -358,6 +366,8 @@ Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeDiagnos
         static_cast<jlong>(snapshot.output_buffer_size_frames),
         static_cast<jlong>(snapshot.output_buffer_capacity_frames),
         static_cast<jlong>(snapshot.output_xrun_count),
+        static_cast<jlong>(snapshot.player_volume),
+        snapshot.player_muted ? 1 : 0,
     };
     auto result = env->NewLongArray(static_cast<jsize>(std::size(values)));
     if (result == nullptr) return nullptr;

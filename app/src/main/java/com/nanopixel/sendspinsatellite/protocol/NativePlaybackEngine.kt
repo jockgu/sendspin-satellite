@@ -2,14 +2,21 @@ package com.nanopixel.sendspinsatellite.protocol
 
 import android.content.Context
 import android.provider.Settings
+import com.nanopixel.sendspinsatellite.connection.PlayerAudioState
 import com.nanopixel.sendspinsatellite.playback.ArtworkSnapshot
 import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
 
 class NativePlaybackEngine(
     context: Context,
     playerName: String,
+    initialPlayerAudioState: PlayerAudioState = PlayerAudioState(),
 ) : AutoCloseable {
-    private var handle = nativeCreate(resolveClientId(context), playerName)
+    private var handle = nativeCreate(
+        resolveClientId(context),
+        playerName,
+        initialPlayerAudioState.volume.coerceIn(0, 100),
+        initialPlayerAudioState.muted,
+    )
 
     fun connect(url: String): Boolean = nativeConnect(requireOpen(), url)
     fun disconnect() { if (handle != 0L) nativeDisconnect(handle) }
@@ -52,6 +59,8 @@ class NativePlaybackEngine(
             outputBufferSizeFrames = values[27].toInt(),
             outputBufferCapacityFrames = values[28].toInt(),
             outputXruns = values[29].toInt(),
+            playerVolume = values[30].toInt(),
+            playerMuted = values[31] != 0L,
         )
     }
     fun nowPlayingIfChanged(knownRevision: Long): NowPlayingSnapshot? {
@@ -115,6 +124,8 @@ class NativePlaybackEngine(
         val outputBufferSizeFrames: Int,
         val outputBufferCapacityFrames: Int,
         val outputXruns: Int,
+        val playerVolume: Int = 100,
+        val playerMuted: Boolean = false,
     )
 
     private companion object {
@@ -124,7 +135,12 @@ class NativePlaybackEngine(
             return if (androidId.isNullOrBlank()) "android-unknown-client" else "android-$androidId"
         }
 
-        @JvmStatic private external fun nativeCreate(clientId: String, playerName: String): Long
+        @JvmStatic private external fun nativeCreate(
+            clientId: String,
+            playerName: String,
+            initialVolume: Int,
+            initialMuted: Boolean,
+        ): Long
         @JvmStatic private external fun nativeDestroy(handle: Long)
         @JvmStatic private external fun nativeConnect(handle: Long, url: String): Boolean
         @JvmStatic private external fun nativeDisconnect(handle: Long)
@@ -144,6 +160,6 @@ class NativePlaybackEngine(
         @JvmStatic private external fun nativeState(handle: Long): Int
 
         private const val RECOVERY_CAUSE_ROUTE_CHANGE = 1
-        private const val DIAGNOSTICS_SIZE = 30
+        private const val DIAGNOSTICS_SIZE = 32
     }
 }

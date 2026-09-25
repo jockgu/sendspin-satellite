@@ -6,6 +6,7 @@
 
 #include <oboe/Oboe.h>
 
+#include "audio_volume.h"
 #include "pcm_render_fifo.h"
 
 namespace sendspin {
@@ -39,6 +40,7 @@ public:
     bool restart();
     uint32_t write(const int16_t* samples, uint32_t frames);
     void clear();
+    void set_volume_state(uint8_t volume, bool muted);
     void set_playback_observer(PlaybackObserver observer, void* context);
     [[nodiscard]] uint32_t queued_frames() const;
     [[nodiscard]] uint64_t underruns() const;
@@ -55,6 +57,7 @@ public:
 
 private:
     PcmRenderFifo fifo_;
+    PcmVolume volume_;
     std::shared_ptr<oboe::AudioStream> stream_;
     PlaybackObserver playback_observer_{nullptr};
     void* playback_observer_context_{nullptr};

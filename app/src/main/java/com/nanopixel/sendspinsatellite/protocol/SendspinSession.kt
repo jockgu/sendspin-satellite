@@ -1,6 +1,7 @@
 package com.nanopixel.sendspinsatellite.protocol
 
 import android.content.Context
+import com.nanopixel.sendspinsatellite.connection.PlayerAudioState
 import com.nanopixel.sendspinsatellite.playback.ArtworkSnapshot
 import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
 import java.util.concurrent.Executors
@@ -9,6 +10,7 @@ import java.util.concurrent.TimeUnit
 class SendspinSession(
     context: Context,
     playerName: String,
+    initialPlayerAudioState: PlayerAudioState = PlayerAudioState(),
     private val listener: Listener,
 ) {
     interface Listener {
@@ -39,7 +41,7 @@ class SendspinSession(
         val nativeSnapshot: NativePlaybackEngine.Diagnostics? = null,
     )
 
-    private val engine = NativePlaybackEngine(context, playerName)
+    private val engine = NativePlaybackEngine(context, playerName, initialPlayerAudioState)
     private val poller = Executors.newSingleThreadScheduledExecutor()
     private var lastState: NativePlaybackEngine.State? = null
     private var lastNowPlayingRevision = -1L

@@ -51,6 +51,10 @@ void OboePcmOutput::clear() {
     fifo_.clear();
 }
 
+void OboePcmOutput::set_volume_state(const uint8_t volume, const bool muted) {
+    volume_.set_state(volume, muted);
+}
+
 void OboePcmOutput::set_playback_observer(PlaybackObserver observer, void* context) {
     playback_observer_ = observer;
     playback_observer_context_ = context;
@@ -103,6 +107,10 @@ oboe::DataCallbackResult OboePcmOutput::onAudioReady(
     void* audio_data,
     const int32_t num_frames) {
     const auto result = fifo_.pull(static_cast<int16_t*>(audio_data), num_frames);
+    volume_.process(
+        static_cast<int16_t*>(audio_data),
+        static_cast<uint32_t>(num_frames),
+        PcmRenderFifo::kChannels);
     if (result.underrun) {
         underruns_.fetch_add(1, std::memory_order_relaxed);
     }
