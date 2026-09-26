@@ -50,7 +50,11 @@ bool has_cause(
 constexpr int64_t kProgressSampleIntervalUs = 1'000'000;
 }  // namespace
 
-NativePlaybackEngine::NativePlaybackEngine(std::string client_id, std::string player_name)
+NativePlaybackEngine::NativePlaybackEngine(
+    std::string client_id,
+    std::string player_name,
+    const uint8_t initial_volume,
+    const bool initial_muted)
     : listener_(output_, &NativePlaybackEngine::on_stream_started, this),
       client_(client_config(client_id, player_name)),
       player_(client_.add_player(player_config())),
@@ -59,6 +63,11 @@ NativePlaybackEngine::NativePlaybackEngine(std::string client_id, std::string pl
     client_.set_listener(this);
     client_.set_network_provider(this);
     player_.set_listener(&listener_);
+    player_.update_volume(initial_volume > 100 ? 100 : initial_volume);
+    player_.update_muted(initial_muted);
+    listener_.set_volume_state(initial_volume, initial_muted);
+    diagnostics_.player_volume = player_.get_volume();
+    diagnostics_.player_muted = player_.get_muted();
     metadata_.set_listener(this);
     artwork_.set_listener(this);
     output_.set_playback_observer(&NativePlaybackEngine::on_frames_played, this);
@@ -234,6 +243,8 @@ void NativePlaybackEngine::refresh_output_diagnostics_locked() {
     diagnostics_.output_buffer_size_frames = output_diagnostics.buffer_size_frames;
     diagnostics_.output_buffer_capacity_frames = output_diagnostics.buffer_capacity_frames;
     diagnostics_.output_xrun_count = output_diagnostics.xrun_count;
+    diagnostics_.player_volume = player_.get_volume();
+    diagnostics_.player_muted = player_.get_muted();
 }
 void NativePlaybackEngine::record_failure(const Failure failure) {
     std::lock_guard lock(diagnostics_mutex_);

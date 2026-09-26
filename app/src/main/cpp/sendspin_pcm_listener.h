@@ -24,11 +24,18 @@ public:
     size_t on_audio_write(uint8_t* data, size_t length, uint32_t timeout_ms) override;
     void on_stream_clear() override;
     void on_stream_start() override;
+    void on_volume_changed(uint8_t volume) override;
+    void on_mute_changed(bool muted) override;
+    void set_volume_state(uint8_t volume, bool muted);
 
 private:
+    void apply_volume_state();
+
     OboePcmOutput& output_;
     StreamObserver stream_observer_;
     void* stream_observer_context_;
+    uint8_t volume_{100};
+    bool muted_{false};
 };
 
 }  // namespace sendspin

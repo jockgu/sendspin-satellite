@@ -28,6 +28,7 @@ import com.nanopixel.sendspinsatellite.MainActivity
 import com.nanopixel.sendspinsatellite.R
 import com.nanopixel.sendspinsatellite.connection.ConnectionPreferences
 import com.nanopixel.sendspinsatellite.connection.ConnectionState
+import com.nanopixel.sendspinsatellite.connection.PlayerAudioState
 import com.nanopixel.sendspinsatellite.connection.SavedServer
 import com.nanopixel.sendspinsatellite.protocol.NativePlaybackEngine
 import com.nanopixel.sendspinsatellite.protocol.SendspinSession
@@ -492,63 +493,73 @@ class PlaybackService : Service() {
     private fun replaceSession(playerName: String): SendspinSession {
         val generation = ++sessionGeneration
         session?.shutdown()
-        return SendspinSession(applicationContext, playerName, object : SendspinSession.Listener {
-            override fun onState(state: SendspinSession.SessionState) {
-                if (generation != sessionGeneration) return
-                diagnosticsCollector.recordEvent("session-state", state.name)
-                val connectionState = state.toConnectionState()
-                if (connectionState in setOf(
-                        ConnectionState.READY,
-                        ConnectionState.BUFFERING,
-                        ConnectionState.PLAYING,
-                    )
-                ) {
-                    activeServer?.let(connectionPreferences::saveServer)
+        return SendspinSession(
+            applicationContext,
+            playerName,
+            connectionPreferences.playerAudioState(),
+            object : SendspinSession.Listener {
+                override fun onState(state: SendspinSession.SessionState) {
+                    if (generation != sessionGeneration) return
+                    diagnosticsCollector.recordEvent("session-state", state.name)
+                    val connectionState = state.toConnectionState()
+                    if (connectionState in setOf(
+                            ConnectionState.READY,
+                            ConnectionState.BUFFERING,
+                            ConnectionState.PLAYING,
+                        )
+                    ) {
+                        activeServer?.let(connectionPreferences::saveServer)
+                    }
+                    publish(status.value.copy(
+                        connectionState = connectionState,
+                        detail = if (!validatedNetworkAvailable && state != SendspinSession.SessionState.DISCONNECTED) {
+                            "Waiting for a validated network."
+                        } else {
+                            state.detail()
+                        },
+                        server = activeServer,
+                        audioDiagnostics = diagnosticsCollector.snapshot(),
+                    ))
                 }
-                publish(status.value.copy(
-                    connectionState = connectionState,
-                    detail = if (!validatedNetworkAvailable && state != SendspinSession.SessionState.DISCONNECTED) {
-                        "Waiting for a validated network."
+
+                override fun onDiagnostics(diagnostics: SendspinSession.Diagnostics) {
+                    if (generation != sessionGeneration) return
+                    val nativeSnapshot = diagnostics.nativeSnapshot
+                    nativeSnapshot?.let {
+                        connectionPreferences.savePlayerAudioState(
+                            PlayerAudioState(it.playerVolume, it.playerMuted),
+                        )
+                    }
+                    val audioDiagnostics = if (nativeSnapshot == null) {
+                        diagnosticsCollector.snapshot()
                     } else {
-                        state.detail()
-                    },
-                    server = activeServer,
-                    audioDiagnostics = diagnosticsCollector.snapshot(),
-                ))
-            }
-
-            override fun onDiagnostics(diagnostics: SendspinSession.Diagnostics) {
-                if (generation != sessionGeneration) return
-                val nativeSnapshot = diagnostics.nativeSnapshot
-                val audioDiagnostics = if (nativeSnapshot == null) {
-                    diagnosticsCollector.snapshot()
-                } else {
-                    refreshAudioPlatformDiagnostics(nativeSnapshot.outputDeviceId)
-                    diagnosticsCollector.updateNative(nativeSnapshot)
+                        refreshAudioPlatformDiagnostics(nativeSnapshot.outputDeviceId)
+                        diagnosticsCollector.updateNative(nativeSnapshot)
+                    }
+                    publish(status.value.copy(
+                        serverName = diagnostics.serverName ?: status.value.serverName,
+                        roundTripUs = diagnostics.roundTripUs.takeIf { it > 0 } ?: status.value.roundTripUs,
+                        clockOffsetUs = diagnostics.offsetUs.takeIf { diagnostics.samples > 0 }
+                            ?: status.value.clockOffsetUs,
+                        clockSamples = diagnostics.samples.takeIf { it > 0 } ?: status.value.clockSamples,
+                        detail = diagnostics.message ?: status.value.detail,
+                        nativeDiagnostics = nativeSnapshot ?: status.value.nativeDiagnostics,
+                        audioDiagnostics = audioDiagnostics,
+                    ))
+                    nativeSnapshot?.let(::logDiagnostics)
                 }
-                publish(status.value.copy(
-                    serverName = diagnostics.serverName ?: status.value.serverName,
-                    roundTripUs = diagnostics.roundTripUs.takeIf { it > 0 } ?: status.value.roundTripUs,
-                    clockOffsetUs = diagnostics.offsetUs.takeIf { diagnostics.samples > 0 }
-                        ?: status.value.clockOffsetUs,
-                    clockSamples = diagnostics.samples.takeIf { it > 0 } ?: status.value.clockSamples,
-                    detail = diagnostics.message ?: status.value.detail,
-                    nativeDiagnostics = nativeSnapshot ?: status.value.nativeDiagnostics,
-                    audioDiagnostics = audioDiagnostics,
-                ))
-                nativeSnapshot?.let(::logDiagnostics)
-            }
 
-            override fun onNowPlaying(snapshot: NowPlayingSnapshot) {
-                if (generation != sessionGeneration) return
-                publish(status.value.copy(nowPlaying = snapshot), refreshNotification = false)
-            }
+                override fun onNowPlaying(snapshot: NowPlayingSnapshot) {
+                    if (generation != sessionGeneration) return
+                    publish(status.value.copy(nowPlaying = snapshot), refreshNotification = false)
+                }
 
-            override fun onArtwork(snapshot: ArtworkSnapshot) {
-                if (generation != sessionGeneration) return
-                publish(status.value.copy(artwork = snapshot))
-            }
-        }).also { session = it }
+                override fun onArtwork(snapshot: ArtworkSnapshot) {
+                    if (generation != sessionGeneration) return
+                    publish(status.value.copy(artwork = snapshot))
+                }
+            },
+        ).also { session = it }
     }
 
     private fun logDiagnostics(snapshot: NativePlaybackEngine.Diagnostics) {
