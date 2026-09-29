@@ -1,5 +1,6 @@
 package com.nanopixel.sendspinsatellite.ui
 
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
@@ -10,10 +11,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -39,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -225,119 +230,197 @@ internal fun NowPlayingScreen(
     onDisconnect: () -> Unit,
     artwork: ArtworkSnapshot = ArtworkSnapshot(),
 ) {
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .safeDrawingPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .then(if (isLandscape) Modifier else Modifier.verticalScroll(rememberScrollState()))
+            .padding(horizontal = 24.dp, vertical = if (isLandscape) 12.dp else 24.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isLandscape) 8.dp else 16.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "Sendspin Satellite",
-                style = MaterialTheme.typography.headlineMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            IconButton(onClick = onSettings) {
-                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+        NowPlayingHeader(onSettings)
+
+        if (isLandscape) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AlbumArtwork(
+                    artwork,
+                    modifier = Modifier
+                        .heightIn(max = 320.dp)
+                        .fillMaxHeight()
+                        .aspectRatio(1f)
+                        .widthIn(max = 320.dp),
+                )
+                NowPlayingDetails(
+                    presentation = presentation,
+                    centered = false,
+                    modifier = Modifier
+                        .weight(1f)
+                        .widthIn(max = 620.dp),
+                    onReconnect = onReconnect,
+                    onDisconnect = onDisconnect,
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 600.dp)
+                    .align(Alignment.CenterHorizontally),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                AlbumArtwork(
+                    artwork,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 360.dp)
+                        .aspectRatio(1f),
+                )
+                NowPlayingDetails(
+                    presentation = presentation,
+                    centered = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    onReconnect = onReconnect,
+                    onDisconnect = onDisconnect,
+                )
             }
         }
+    }
+}
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 600.dp)
-                .align(Alignment.CenterHorizontally),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+@Composable
+private fun NowPlayingHeader(onSettings: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "Satellite",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+        IconButton(onClick = onSettings) {
+            Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+        }
+    }
+}
+
+@Composable
+private fun NowPlayingDetails(
+    presentation: NowPlayingPresentation,
+    centered: Boolean,
+    modifier: Modifier,
+    onReconnect: () -> Unit,
+    onDisconnect: () -> Unit,
+) {
+    val textAlign = if (centered) TextAlign.Center else TextAlign.Start
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(if (centered) 10.dp else 6.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            AlbumArtwork(artwork)
             if (presentation.showConnectionProgress) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(
+                    modifier = Modifier.size(if (centered) 24.dp else 18.dp),
+                    strokeWidth = 2.dp,
+                )
             }
             Text(
                 presentation.status,
-                style = MaterialTheme.typography.titleLarge,
+                style = if (centered) {
+                    MaterialTheme.typography.titleLarge
+                } else {
+                    MaterialTheme.typography.titleMedium
+                },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
+                textAlign = textAlign,
             )
-            presentation.title?.let { title ->
-                Text(
-                    title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
+        }
+        presentation.title?.let { title ->
+            Text(
+                title,
+                style = MaterialTheme.typography.headlineSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = textAlign,
+            )
+        }
+        presentation.artist?.let { artist ->
+            Text(
+                artist,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = textAlign,
+            )
+        }
+        presentation.album?.let { album ->
+            Text(
+                album,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = textAlign,
+            )
+        }
+        presentation.progress?.let { progress ->
+            TrackProgress(progress)
+        }
+        presentation.emptyState?.let { emptyState ->
+            Text(
+                emptyState,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = textAlign,
+            )
+        }
+        presentation.context?.let { context ->
+            Text(
+                context,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = textAlign,
+            )
+        }
+        presentation.message?.let { message ->
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = if (centered) 3 else 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = textAlign,
+            )
+        }
+        if (presentation.showReconnect) {
+            Button(onClick = onReconnect) {
+                Text("Connect")
             }
-            presentation.artist?.let { artist ->
-                Text(
-                    artist,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
-            }
-            presentation.album?.let { album ->
-                Text(
-                    album,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
-            }
-            presentation.progress?.let { progress ->
-                TrackProgress(progress)
-            }
-            presentation.emptyState?.let { emptyState ->
-                Text(
-                    emptyState,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
-            }
-            presentation.context?.let { context ->
-                Text(
-                    context,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
-            }
-            presentation.message?.let { message ->
-                Text(
-                    message,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
-            }
-            if (presentation.showReconnect) {
-                Button(onClick = onReconnect) {
-                    Text("Connect")
-                }
-            }
-            if (presentation.showDisconnect) {
-                TextButton(onClick = onDisconnect) {
-                    Text("Disconnect")
-                }
+        }
+        if (presentation.showDisconnect) {
+            TextButton(onClick = onDisconnect) {
+                Text("Disconnect")
             }
         }
     }
@@ -380,7 +463,10 @@ private fun TrackProgress(progress: ProgressPresentation) {
 }
 
 @Composable
-private fun AlbumArtwork(snapshot: ArtworkSnapshot) {
+private fun AlbumArtwork(
+    snapshot: ArtworkSnapshot,
+    modifier: Modifier,
+) {
     var bitmap by remember(
         snapshot.revision,
         snapshot.generation,
@@ -391,10 +477,7 @@ private fun AlbumArtwork(snapshot: ArtworkSnapshot) {
     }
 
     Box(
-        modifier = Modifier
-            .widthIn(max = 360.dp)
-            .fillMaxWidth()
-            .aspectRatio(1f)
+        modifier = modifier
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
