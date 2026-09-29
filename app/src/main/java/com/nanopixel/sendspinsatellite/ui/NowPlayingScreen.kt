@@ -55,6 +55,7 @@ import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
 import com.nanopixel.sendspinsatellite.connection.SavedServer
 import com.nanopixel.sendspinsatellite.playback.ArtworkSnapshot
 import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
+import com.nanopixel.sendspinsatellite.playback.PlaybackCommand
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -75,7 +76,19 @@ internal data class NowPlayingPresentation(
     val showConnectionProgress: Boolean,
     val showReconnect: Boolean,
     val showDisconnect: Boolean,
+    val groupPlaybackState: NowPlayingSnapshot.PlaybackState?,
+    val supportedPlaybackCommands: Set<PlaybackCommand>,
 )
+
+internal val NowPlayingPresentation.primaryPlaybackCommand: PlaybackCommand?
+    get() = when (groupPlaybackState) {
+        NowPlayingSnapshot.PlaybackState.PLAYING -> PlaybackCommand.PAUSE
+        NowPlayingSnapshot.PlaybackState.STOPPED -> PlaybackCommand.PLAY
+        null -> null
+    }?.takeIf { it in supportedPlaybackCommands }
+
+internal val NowPlayingPresentation.canStopPlayback: Boolean
+    get() = groupPlaybackState != null && PlaybackCommand.STOP in supportedPlaybackCommands
 
 internal data class ProgressPresentation(
     val fraction: Float,
@@ -208,6 +221,8 @@ internal fun ConnectionUiState.toNowPlayingPresentation(): NowPlayingPresentatio
             ConnectionState.BUFFERING,
             ConnectionState.PLAYING,
         ),
+        groupPlaybackState = nowPlaying.group?.playbackState,
+        supportedPlaybackCommands = supportedPlaybackCommands,
     )
 }
 
@@ -228,6 +243,7 @@ internal fun NowPlayingScreen(
     onSettings: () -> Unit,
     onReconnect: () -> Unit,
     onDisconnect: () -> Unit,
+    onPlaybackCommand: (PlaybackCommand) -> Unit = {},
     artwork: ArtworkSnapshot = ArtworkSnapshot(),
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -266,6 +282,7 @@ internal fun NowPlayingScreen(
                         .widthIn(max = 620.dp),
                     onReconnect = onReconnect,
                     onDisconnect = onDisconnect,
+                    onPlaybackCommand = onPlaybackCommand,
                 )
             }
         } else {
@@ -290,6 +307,7 @@ internal fun NowPlayingScreen(
                     modifier = Modifier.fillMaxWidth(),
                     onReconnect = onReconnect,
                     onDisconnect = onDisconnect,
+                    onPlaybackCommand = onPlaybackCommand,
                 )
             }
         }
@@ -322,6 +340,7 @@ private fun NowPlayingDetails(
     modifier: Modifier,
     onReconnect: () -> Unit,
     onDisconnect: () -> Unit,
+    onPlaybackCommand: (PlaybackCommand) -> Unit,
 ) {
     val textAlign = if (centered) TextAlign.Center else TextAlign.Start
 
@@ -383,6 +402,7 @@ private fun NowPlayingDetails(
         presentation.progress?.let { progress ->
             TrackProgress(progress)
         }
+        PlaybackControls(presentation, centered, onPlaybackCommand)
         presentation.emptyState?.let { emptyState ->
             Text(
                 emptyState,
@@ -421,6 +441,43 @@ private fun NowPlayingDetails(
         if (presentation.showDisconnect) {
             TextButton(onClick = onDisconnect) {
                 Text("Disconnect")
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaybackControls(
+    presentation: NowPlayingPresentation,
+    centered: Boolean,
+    onPlaybackCommand: (PlaybackCommand) -> Unit,
+) {
+    val primaryCommand = presentation.primaryPlaybackCommand
+    if (primaryCommand == null && !presentation.canStopPlayback) return
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            "Current group",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            primaryCommand?.let { command ->
+                Button(onClick = { onPlaybackCommand(command) }) {
+                    Text(if (command == PlaybackCommand.PAUSE) "Pause" else "Play")
+                }
+            }
+            if (presentation.canStopPlayback) {
+                TextButton(onClick = { onPlaybackCommand(PlaybackCommand.STOP) }) {
+                    Text("Stop")
+                }
             }
         }
     }

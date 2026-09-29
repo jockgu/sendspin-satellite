@@ -12,7 +12,21 @@ namespace {
 
 using sendspin::ClockFilter;
 using sendspin::NativePlaybackEngine;
+using sendspin::SendspinControllerCommand;
 using RecoveryCause = sendspin::PlaybackRecoveryState::RecoveryCause;
+
+std::optional<SendspinControllerCommand> controller_command(jint value) {
+    switch (value) {
+        case 0:
+            return SendspinControllerCommand::PLAY;
+        case 1:
+            return SendspinControllerCommand::PAUSE;
+        case 2:
+            return SendspinControllerCommand::STOP;
+        default:
+            return std::nullopt;
+    }
+}
 
 ClockFilter* filter(jlong handle) {
     return reinterpret_cast<ClockFilter*>(handle);
@@ -391,4 +405,32 @@ Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeArtwork
         static_cast<uint64_t>(known_revision));
     if (!snapshot.has_value()) return nullptr;
     return artwork_snapshot(env, *snapshot);
+}
+
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeControllerCapabilitiesIfChanged(
+    JNIEnv* env, jclass, jlong handle, jlong known_revision) {
+    const auto capabilities = reinterpret_cast<NativePlaybackEngine*>(handle)
+        ->controller_capabilities_after(static_cast<uint64_t>(known_revision));
+    if (!capabilities.has_value()) return nullptr;
+    const jlong values[] = {
+        static_cast<jlong>(capabilities->revision),
+        capabilities->play ? 1 : 0,
+        capabilities->pause ? 1 : 0,
+        capabilities->stop ? 1 : 0,
+    };
+    auto result = env->NewLongArray(4);
+    if (result == nullptr) return nullptr;
+    env->SetLongArrayRegion(result, 0, 4, values);
+    return result;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeRequestControllerCommand(
+    JNIEnv*, jclass, jlong handle, jint command) {
+    const auto decoded = controller_command(command);
+    if (!decoded.has_value()) return JNI_FALSE;
+    return reinterpret_cast<NativePlaybackEngine*>(handle)->request_controller_command(*decoded)
+        ? JNI_TRUE
+        : JNI_FALSE;
 }

@@ -10,6 +10,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
+import com.nanopixel.sendspinsatellite.playback.PlaybackCommand
 
 @Composable
 fun SendspinSatelliteApp(
@@ -21,6 +22,7 @@ fun SendspinSatelliteApp(
     onSelectDiscoveredServer: (String) -> Unit,
     onDisconnect: () -> Unit,
     onForgetServer: () -> Unit,
+    onPlaybackCommand: (PlaybackCommand) -> Unit,
 ) {
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showDiagnostics by rememberSaveable { mutableStateOf(false) }
@@ -63,6 +65,7 @@ fun SendspinSatelliteApp(
                     onSettings = { showSettings = true },
                     onReconnect = onConnect,
                     onDisconnect = onDisconnect,
+                    onPlaybackCommand = onPlaybackCommand,
                     artwork = state.artwork,
                 )
 

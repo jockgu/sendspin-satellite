@@ -18,6 +18,7 @@ data class PlaybackStatus(
     val discoveredServers: List<DiscoveredServer> = emptyList(),
     val nowPlaying: NowPlayingSnapshot = NowPlayingSnapshot(),
     val artwork: ArtworkSnapshot = ArtworkSnapshot(),
+    val supportedPlaybackCommands: Set<PlaybackCommand> = emptySet(),
 )
 
 fun PlaybackStatus.toUiState(current: ConnectionUiState) = current.copy(
@@ -31,4 +32,5 @@ fun PlaybackStatus.toUiState(current: ConnectionUiState) = current.copy(
     discoveredServers = discoveredServers,
     nowPlaying = nowPlaying,
     artwork = artwork,
+    supportedPlaybackCommands = supportedPlaybackCommands,
 )

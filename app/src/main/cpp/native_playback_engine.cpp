@@ -47,7 +47,8 @@ bool has_cause(
     const PlaybackRecoveryState::RecoveryCause cause) {
     return (mask & static_cast<PlaybackRecoveryState::RecoveryCauseMask>(cause)) != 0;
 }
-constexpr int64_t kProgressSampleIntervalUs = 1'000'000;
+constexpr int64_t kProgressSampleIntervalUs = 250'000;
+constexpr size_t kMaxPendingControllerCommands = 8;
 }  // namespace
 
 NativePlaybackEngine::NativePlaybackEngine(
@@ -59,7 +60,8 @@ NativePlaybackEngine::NativePlaybackEngine(
       client_(client_config(client_id, player_name)),
       player_(client_.add_player(player_config())),
       metadata_(client_.add_metadata()),
-      artwork_(client_.add_artwork(artwork_config())) {
+      artwork_(client_.add_artwork(artwork_config())),
+      controller_(client_.add_controller()) {
     client_.set_listener(this);
     client_.set_network_provider(this);
     player_.set_listener(&listener_);
@@ -70,6 +72,7 @@ NativePlaybackEngine::NativePlaybackEngine(
     diagnostics_.player_muted = player_.get_muted();
     metadata_.set_listener(this);
     artwork_.set_listener(this);
+    controller_.set_listener(this);
     output_.set_playback_observer(&NativePlaybackEngine::on_frames_played, this);
 }
 NativePlaybackEngine::~NativePlaybackEngine() {
@@ -91,6 +94,7 @@ bool NativePlaybackEngine::connect(std::string url) {
         std::lock_guard lock(control_mutex_);
         pending_url_ = std::move(url);
         disconnect_requested_ = false;
+        pending_controller_commands_.clear();
     }
     state_.store(State::Connecting, std::memory_order_release);
     if (!running_.exchange(true, std::memory_order_acq_rel)) {
@@ -104,7 +108,23 @@ void NativePlaybackEngine::disconnect() {
     std::lock_guard lock(control_mutex_);
     pending_url_.clear();
     disconnect_requested_ = true;
+    pending_controller_commands_.clear();
     state_.store(State::Stopped, std::memory_order_release);
+}
+bool NativePlaybackEngine::request_controller_command(
+    const SendspinControllerCommand command) {
+    const auto current_state = state_.load(std::memory_order_acquire);
+    if (current_state != State::Ready && current_state != State::Buffering &&
+        current_state != State::Playing) {
+        return false;
+    }
+    std::lock_guard lock(control_mutex_);
+    if (disconnect_requested_) return false;
+    // ponytail: cap the UI command backlog at eight; add a dedicated queue only if command
+    // throughput grows beyond interactive button use.
+    if (pending_controller_commands_.size() >= kMaxPendingControllerCommands) return false;
+    pending_controller_commands_.push_back(command);
+    return true;
 }
 void NativePlaybackEngine::request_recovery(const PlaybackRecoveryState::RecoveryCause cause) {
     recovery_state_.request_recovery(cause);
@@ -130,6 +150,12 @@ std::optional<NowPlayingState::Snapshot> NativePlaybackEngine::now_playing_after
 std::optional<ArtworkState::Snapshot> NativePlaybackEngine::artwork_after(
     const uint64_t known_revision) const {
     return artwork_state_.snapshot_after(known_revision);
+}
+std::optional<NativePlaybackEngine::ControllerCapabilities>
+NativePlaybackEngine::controller_capabilities_after(const uint64_t known_revision) const {
+    std::lock_guard lock(controller_capabilities_mutex_);
+    if (controller_capabilities_.revision == known_revision) return std::nullopt;
+    return controller_capabilities_;
 }
 bool NativePlaybackEngine::is_network_ready() {
     return network_available_.load(std::memory_order_acquire);
@@ -164,6 +190,24 @@ void NativePlaybackEngine::on_group_update(const GroupUpdateObject&) {
             : NowPlayingState::GroupPlaybackState::Stopped;
     }
     now_playing_.update_group(recovery_state_.recovery_generation(), std::move(snapshot));
+}
+void NativePlaybackEngine::on_controller_state(const ServerStateControllerObject& state) {
+    const auto supports = [&state](const SendspinControllerCommand command) {
+        return std::find(state.supported_commands.begin(), state.supported_commands.end(), command) !=
+            state.supported_commands.end();
+    };
+    std::lock_guard lock(controller_capabilities_mutex_);
+    ++controller_capabilities_.revision;
+    controller_capabilities_.play = supports(SendspinControllerCommand::PLAY);
+    controller_capabilities_.pause = supports(SendspinControllerCommand::PAUSE);
+    controller_capabilities_.stop = supports(SendspinControllerCommand::STOP);
+}
+void NativePlaybackEngine::on_controller_state_clear() {
+    std::lock_guard lock(controller_capabilities_mutex_);
+    ++controller_capabilities_.revision;
+    controller_capabilities_.play = false;
+    controller_capabilities_.pause = false;
+    controller_capabilities_.stop = false;
 }
 void NativePlaybackEngine::on_metadata(const ServerMetadataStateObject& metadata) {
     NowPlayingState::Metadata snapshot;
@@ -300,13 +344,16 @@ void NativePlaybackEngine::run() {
         }
         std::string url;
         bool disconnect = false;
+        std::deque<SendspinControllerCommand> controller_commands;
         {
             std::lock_guard lock(control_mutex_);
             url.swap(pending_url_);
             disconnect = disconnect_requested_;
             disconnect_requested_ = false;
+            controller_commands.swap(pending_controller_commands_);
         }
         if (disconnect) {
+            controller_commands.clear();
             focus_suspended = false;
             reconnect_policy_.cancel();
             active_url.clear();
@@ -430,6 +477,14 @@ void NativePlaybackEngine::run() {
             }
         }
         client_.loop();
+        if (!disconnect && client_.is_connected()) {
+            const auto& supported = controller_.get_controller_state().supported_commands;
+            for (const auto command : controller_commands) {
+                if (std::find(supported.begin(), supported.end(), command) != supported.end()) {
+                    controller_.send_command({.command = command});
+                }
+            }
+        }
         drain_playback_feedback();
         if (buffering_requested_.exchange(false, std::memory_order_acq_rel)) {
             recovery_state_.buffering();

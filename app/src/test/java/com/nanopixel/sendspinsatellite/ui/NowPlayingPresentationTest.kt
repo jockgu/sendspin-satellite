@@ -4,6 +4,7 @@ import com.nanopixel.sendspinsatellite.connection.ConnectionState
 import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
 import com.nanopixel.sendspinsatellite.connection.SavedServer
 import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
+import com.nanopixel.sendspinsatellite.playback.PlaybackCommand
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -247,5 +248,54 @@ class NowPlayingPresentationTest {
         ).toNowPlayingPresentation()
 
         assertEquals("Kitchen · Music Assistant", presentation.context)
+    }
+
+    @Test
+    fun `transport controls follow group state and advertised commands`() {
+        val playing = ConnectionUiState(
+            connectionState = ConnectionState.PLAYING,
+            nowPlaying = NowPlayingSnapshot(
+                group = NowPlayingSnapshot.Group(
+                    playbackState = NowPlayingSnapshot.PlaybackState.PLAYING,
+                ),
+            ),
+            supportedPlaybackCommands = setOf(PlaybackCommand.PAUSE, PlaybackCommand.STOP),
+        ).toNowPlayingPresentation()
+        assertEquals(PlaybackCommand.PAUSE, playing.primaryPlaybackCommand)
+        assertTrue(playing.canStopPlayback)
+
+        val stopped = ConnectionUiState(
+            connectionState = ConnectionState.READY,
+            nowPlaying = NowPlayingSnapshot(
+                group = NowPlayingSnapshot.Group(
+                    playbackState = NowPlayingSnapshot.PlaybackState.STOPPED,
+                ),
+            ),
+            supportedPlaybackCommands = setOf(PlaybackCommand.PLAY),
+        ).toNowPlayingPresentation()
+        assertEquals(PlaybackCommand.PLAY, stopped.primaryPlaybackCommand)
+        assertFalse(stopped.canStopPlayback)
+
+        val unknownState = ConnectionUiState(
+            connectionState = ConnectionState.PLAYING,
+            supportedPlaybackCommands = setOf(
+                PlaybackCommand.PLAY,
+                PlaybackCommand.PAUSE,
+                PlaybackCommand.STOP,
+            ),
+        ).toNowPlayingPresentation()
+        assertNull(unknownState.primaryPlaybackCommand)
+        assertFalse(unknownState.canStopPlayback)
+
+        val clearedCapabilities = ConnectionUiState(
+            connectionState = ConnectionState.PLAYING,
+            nowPlaying = NowPlayingSnapshot(
+                group = NowPlayingSnapshot.Group(
+                    playbackState = NowPlayingSnapshot.PlaybackState.PLAYING,
+                ),
+            ),
+        ).toNowPlayingPresentation()
+        assertNull(clearedCapabilities.primaryPlaybackCommand)
+        assertFalse(clearedCapabilities.canStopPlayback)
     }
 }

@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nanopixel.sendspinsatellite.connection.ConnectionViewModel
+import com.nanopixel.sendspinsatellite.playback.PlaybackCommand
 import com.nanopixel.sendspinsatellite.ui.SendspinSatelliteApp
 
 class MainActivity : ComponentActivity() {
@@ -45,6 +46,7 @@ class MainActivity : ComponentActivity() {
                 onSelectDiscoveredServer = connectionViewModel::selectDiscoveredServer,
                 onDisconnect = connectionViewModel::disconnect,
                 onForgetServer = connectionViewModel::forgetServer,
+                onPlaybackCommand = connectionViewModel::sendPlaybackCommand,
             )
         }
     }

@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -10,6 +11,7 @@
 
 #include <sendspin/client.h>
 #include <sendspin/artwork_role.h>
+#include <sendspin/controller_role.h>
 #include <sendspin/metadata_role.h>
 #include <sendspin/player_role.h>
 
@@ -24,6 +26,7 @@ namespace sendspin {
 
 class NativePlaybackEngine final : public SendspinClientListener,
                                    public SendspinNetworkProvider,
+                                   public ControllerRoleListener,
                                    public MetadataRoleListener,
                                    public ArtworkRoleListener {
 public:
@@ -81,8 +84,16 @@ public:
         bool player_muted{false};
     };
 
+    struct ControllerCapabilities {
+        uint64_t revision{0};
+        bool play{false};
+        bool pause{false};
+        bool stop{false};
+    };
+
     bool connect(std::string url);
     void disconnect();
+    bool request_controller_command(SendspinControllerCommand command);
     void request_recovery(
         PlaybackRecoveryState::RecoveryCause cause =
             PlaybackRecoveryState::RecoveryCause::OutputError);
@@ -95,9 +106,13 @@ public:
         uint64_t known_revision) const;
     [[nodiscard]] std::optional<ArtworkState::Snapshot> artwork_after(
         uint64_t known_revision) const;
+    [[nodiscard]] std::optional<ControllerCapabilities> controller_capabilities_after(
+        uint64_t known_revision) const;
     bool is_network_ready() override;
     void on_time_sync_updated(float) override;
     void on_group_update(const GroupUpdateObject&) override;
+    void on_controller_state(const ServerStateControllerObject& state) override;
+    void on_controller_state_clear() override;
     void on_metadata(const ServerMetadataStateObject& metadata) override;
     void on_metadata_clear() override;
     void on_image_decode(uint8_t slot, const uint8_t* data, size_t length,
@@ -125,6 +140,7 @@ private:
     PlayerRole& player_;
     MetadataRole& metadata_;
     ArtworkRole& artwork_;
+    ControllerRole& controller_;
     NowPlayingState now_playing_;
     ArtworkState artwork_state_;
     PlaybackRecoveryState recovery_state_;
@@ -134,10 +150,13 @@ private:
     std::atomic<bool> network_available_{true};
     mutable std::mutex diagnostics_mutex_;
     Diagnostics diagnostics_;
+    mutable std::mutex controller_capabilities_mutex_;
+    ControllerCapabilities controller_capabilities_;
     bool reconnect_attempt_active_{false};
     std::mutex control_mutex_;
     std::string pending_url_;
     bool disconnect_requested_{false};
+    std::deque<SendspinControllerCommand> pending_controller_commands_;
     std::atomic<bool> focus_suspended_{false};
     std::atomic<bool> buffering_requested_{false};
     std::atomic<bool> playing_requested_{false};

@@ -104,8 +104,42 @@ int main() {
     assert(with_group->group->name == std::optional<std::string>("Downstairs"));
     assert(with_group->group->playback_state == NowPlayingState::GroupPlaybackState::Playing);
 
+    NowPlayingState::Metadata seeked_metadata;
+    seeked_metadata.title = "Seeked track";
+    seeked_metadata.progress = NowPlayingState::Progress{
+        .reported_position_ms = 80'000,
+        .duration_ms = 234'567,
+        .playback_speed_milli = 1'000,
+    };
+    state.update_metadata(2, std::move(seeked_metadata));
+    const auto seeked = state.snapshot_after(with_group->revision);
+    assert(seeked.has_value());
+    assert(seeked->progress->reported_position_ms == 80'000);
+    assert(seeked->progress->interpolated_position_ms == 80'000);
+
+    state.update_group(2, NowPlayingState::Group{
+        .playback_state = NowPlayingState::GroupPlaybackState::Stopped,
+    });
+    const auto stopped = state.snapshot_after(seeked->revision);
+    assert(stopped.has_value());
+    state.update_interpolated_progress(2, 90'000);
+    assert(!state.snapshot_after(stopped->revision).has_value());
+
+    NowPlayingState::Metadata stopped_metadata;
+    stopped_metadata.title = "Seeked track";
+    stopped_metadata.progress = NowPlayingState::Progress{
+        .reported_position_ms = 0,
+        .duration_ms = 234'567,
+        .playback_speed_milli = 0,
+    };
+    state.update_metadata(2, std::move(stopped_metadata));
+    const auto stopped_at_origin = state.snapshot_after(stopped->revision);
+    assert(stopped_at_origin.has_value());
+    assert(stopped_at_origin->progress->reported_position_ms == 0);
+    assert(stopped_at_origin->progress->interpolated_position_ms == 0);
+
     state.clear_metadata(2);
-    const auto metadata_cleared = state.snapshot_after(with_group->revision);
+    const auto metadata_cleared = state.snapshot_after(stopped_at_origin->revision);
     assert(metadata_cleared.has_value());
     assert(!metadata_cleared->title.has_value());
     assert(!metadata_cleared->artist.has_value());

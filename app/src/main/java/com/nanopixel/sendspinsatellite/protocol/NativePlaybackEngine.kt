@@ -5,6 +5,7 @@ import android.provider.Settings
 import com.nanopixel.sendspinsatellite.connection.PlayerAudioState
 import com.nanopixel.sendspinsatellite.playback.ArtworkSnapshot
 import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
+import com.nanopixel.sendspinsatellite.playback.PlaybackCommand
 
 class NativePlaybackEngine(
     context: Context,
@@ -71,6 +72,21 @@ class NativePlaybackEngine(
         if (handle == 0L) return null
         return nativeArtworkIfChanged(requireOpen(), knownRevision)
     }
+    fun controllerCapabilitiesIfChanged(knownRevision: Long): ControllerCapabilities? {
+        if (handle == 0L) return null
+        val values = nativeControllerCapabilitiesIfChanged(requireOpen(), knownRevision) ?: return null
+        if (values.size != CONTROLLER_CAPABILITIES_SIZE) return null
+        val commands = buildSet {
+            if (values[1] != 0L) add(PlaybackCommand.PLAY)
+            if (values[2] != 0L) add(PlaybackCommand.PAUSE)
+            if (values[3] != 0L) add(PlaybackCommand.STOP)
+        }
+        return ControllerCapabilities(values[0], commands)
+    }
+    fun requestControllerCommand(command: PlaybackCommand): Boolean {
+        if (handle == 0L) return false
+        return nativeRequestControllerCommand(requireOpen(), command.nativeValue())
+    }
     fun requestOutputRecovery() {
         if (handle != 0L) nativeRequestRecovery(handle, RECOVERY_CAUSE_ROUTE_CHANGE)
     }
@@ -128,6 +144,17 @@ class NativePlaybackEngine(
         val playerMuted: Boolean = false,
     )
 
+    data class ControllerCapabilities(
+        val revision: Long,
+        val supportedCommands: Set<PlaybackCommand>,
+    )
+
+    private fun PlaybackCommand.nativeValue(): Int = when (this) {
+        PlaybackCommand.PLAY -> NATIVE_COMMAND_PLAY
+        PlaybackCommand.PAUSE -> NATIVE_COMMAND_PAUSE
+        PlaybackCommand.STOP -> NATIVE_COMMAND_STOP
+    }
+
     private companion object {
         init { System.loadLibrary("sendspin_native") }
         private fun resolveClientId(context: Context): String {
@@ -154,6 +181,11 @@ class NativePlaybackEngine(
             handle: Long,
             knownRevision: Long,
         ): ArtworkSnapshot?
+        @JvmStatic private external fun nativeControllerCapabilitiesIfChanged(
+            handle: Long,
+            knownRevision: Long,
+        ): LongArray?
+        @JvmStatic private external fun nativeRequestControllerCommand(handle: Long, command: Int): Boolean
         @JvmStatic private external fun nativeRequestRecovery(handle: Long, cause: Int)
         @JvmStatic private external fun nativeSuspendForFocus(handle: Long)
         @JvmStatic private external fun nativeResumeFromFocus(handle: Long)
@@ -161,5 +193,9 @@ class NativePlaybackEngine(
 
         private const val RECOVERY_CAUSE_ROUTE_CHANGE = 1
         private const val DIAGNOSTICS_SIZE = 32
+        private const val CONTROLLER_CAPABILITIES_SIZE = 4
+        private const val NATIVE_COMMAND_PLAY = 0
+        private const val NATIVE_COMMAND_PAUSE = 1
+        private const val NATIVE_COMMAND_STOP = 2
     }
 }

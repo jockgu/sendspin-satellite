@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nanopixel.sendspinsatellite.playback.PlaybackService
+import com.nanopixel.sendspinsatellite.playback.PlaybackCommand
 import com.nanopixel.sendspinsatellite.playback.toUiState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -167,6 +168,10 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
 
     fun disconnect() {
         PlaybackService.stop(app)
+    }
+
+    fun sendPlaybackCommand(command: PlaybackCommand) {
+        PlaybackService.sendPlaybackCommand(app, command)
     }
 
     fun forgetServer() {

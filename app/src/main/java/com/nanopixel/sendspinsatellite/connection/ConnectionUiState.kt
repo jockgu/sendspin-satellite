@@ -4,6 +4,7 @@ import com.nanopixel.sendspinsatellite.playback.AlphaAudioDiagnostics
 import com.nanopixel.sendspinsatellite.playback.ArtworkSnapshot
 import com.nanopixel.sendspinsatellite.playback.DiscoveredServer
 import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
+import com.nanopixel.sendspinsatellite.playback.PlaybackCommand
 
 /** The user-visible lifecycle of a Sendspin session. */
 enum class ConnectionState(val label: String) {
@@ -34,4 +35,5 @@ data class ConnectionUiState(
     val discoveredServers: List<DiscoveredServer> = emptyList(),
     val nowPlaying: NowPlayingSnapshot = NowPlayingSnapshot(),
     val artwork: ArtworkSnapshot = ArtworkSnapshot(),
+    val supportedPlaybackCommands: Set<PlaybackCommand> = emptySet(),
 )

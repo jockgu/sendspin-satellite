@@ -141,6 +141,9 @@ class PlaybackService : Service() {
             ACTION_DISCOVER -> discoverServers(intent.getStringExtra(EXTRA_PLAYER_NAME).orEmpty())
             ACTION_SELECT_DISCOVERED -> selectDiscoveredServer(intent.getStringExtra(EXTRA_SERVER_ID).orEmpty())
             ACTION_STOP -> stopPlayback()
+            ACTION_PLAYBACK_COMMAND -> PlaybackCommand.entries
+                .firstOrNull { it.name == intent.getStringExtra(EXTRA_PLAYBACK_COMMAND) }
+                ?.let { session?.requestControllerCommand(it) }
         }
         return START_NOT_STICKY
     }
@@ -512,6 +515,16 @@ class PlaybackService : Service() {
                     }
                     publish(status.value.copy(
                         connectionState = connectionState,
+                        supportedPlaybackCommands = if (connectionState in setOf(
+                                ConnectionState.READY,
+                                ConnectionState.BUFFERING,
+                                ConnectionState.PLAYING,
+                            )
+                        ) {
+                            status.value.supportedPlaybackCommands
+                        } else {
+                            emptySet()
+                        },
                         detail = if (!validatedNetworkAvailable && state != SendspinSession.SessionState.DISCONNECTED) {
                             "Waiting for a validated network."
                         } else {
@@ -557,6 +570,11 @@ class PlaybackService : Service() {
                 override fun onArtwork(snapshot: ArtworkSnapshot) {
                     if (generation != sessionGeneration) return
                     publish(status.value.copy(artwork = snapshot))
+                }
+
+                override fun onControllerCommands(commands: Set<PlaybackCommand>) {
+                    if (generation != sessionGeneration) return
+                    publish(status.value.copy(supportedPlaybackCommands = commands))
                 }
             },
         ).also { session = it }
@@ -648,7 +666,7 @@ class PlaybackService : Service() {
         ))
         .addAction(
             0,
-            "Stop",
+            "Disconnect",
             PendingIntent.getService(
                 this,
                 1,
@@ -679,10 +697,12 @@ class PlaybackService : Service() {
         const val ACTION_DISCOVER = "com.nanopixel.sendspinsatellite.action.DISCOVER"
         const val ACTION_SELECT_DISCOVERED = "com.nanopixel.sendspinsatellite.action.SELECT_DISCOVERED"
         const val ACTION_STOP = "com.nanopixel.sendspinsatellite.action.STOP"
+        const val ACTION_PLAYBACK_COMMAND = "com.nanopixel.sendspinsatellite.action.PLAYBACK_COMMAND"
         const val EXTRA_SERVER_ADDRESS = "server_address"
         const val EXTRA_PLAYER_NAME = "player_name"
         const val EXTRA_SERVER_NAME = "server_name"
         const val EXTRA_SERVER_ID = "server_id"
+        const val EXTRA_PLAYBACK_COMMAND = "playback_command"
         const val NOTIFICATION_CHANNEL_ID = "playback"
         const val NOTIFICATION_ID = 1
         private const val TAG = "PlaybackService"
@@ -750,6 +770,14 @@ class PlaybackService : Service() {
 
         internal fun stop(context: Context) {
             context.startService(Intent(context, PlaybackService::class.java).setAction(ACTION_STOP))
+        }
+
+        internal fun sendPlaybackCommand(context: Context, command: PlaybackCommand) {
+            context.startService(
+                Intent(context, PlaybackService::class.java)
+                    .setAction(ACTION_PLAYBACK_COMMAND)
+                    .putExtra(EXTRA_PLAYBACK_COMMAND, command.name),
+            )
         }
 
         internal val state: StateFlow<PlaybackStatus> = status.asStateFlow()

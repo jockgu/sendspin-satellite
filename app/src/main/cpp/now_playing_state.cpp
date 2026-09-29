@@ -28,7 +28,9 @@ void NowPlayingState::update_interpolated_progress(
     if (!accept_generation_locked(generation)) return;
     if (!snapshot_.progress.has_value() ||
         snapshot_.progress->duration_ms == 0 ||
-        snapshot_.progress->playback_speed_milli == 0) {
+        snapshot_.progress->playback_speed_milli == 0 ||
+        (snapshot_.group.has_value() && snapshot_.group->playback_state ==
+            GroupPlaybackState::Stopped)) {
         return;
     }
 
