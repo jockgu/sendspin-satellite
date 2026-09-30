@@ -18,8 +18,10 @@ SendspinClientConfig client_config(const std::string& client_id, const std::stri
 }
 PlayerRoleConfig player_config() {
     PlayerRoleConfig config;
-    config.audio_formats = {{SendspinCodecFormat::PCM, PcmRenderFifo::kChannels,
-                             PcmRenderFifo::kSampleRate, 16}};
+    config.audio_formats = {
+        {SendspinCodecFormat::FLAC, PcmRenderFifo::kChannels, PcmRenderFifo::kSampleRate, 16},
+        {SendspinCodecFormat::PCM, PcmRenderFifo::kChannels, PcmRenderFifo::kSampleRate, 16},
+    };
     // Internet radio is inherently bursty. Keep one second queued at the server so brief
     // delivery gaps cannot drain the local PCM timeline; retain a modest scheduling lead.
     config.required_lead_time_ms = 250;

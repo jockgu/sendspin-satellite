@@ -17,6 +17,7 @@ What is currently working:
 - Foreground-service recovery responds to validated network changes, transport
   loss, output errors, route changes, and focus recovery with bounded retry.
 - A fixed native diagnostics snapshot is retained and logged at a modest rate.
+- Native playback advertises 48 kHz stereo 16-bit FLAC first, with PCM fallback.
 - The direct host tests and 24-hour virtual recovery soak pass; a 15-minute
   short soak is configured for CI.
 

@@ -427,6 +427,81 @@ updates do not increase notification churn or harm battery use.
 at a glance, remains calm when data is partial, never shows data from an old
 session, and leaves audio correctness and recovery behaviour unchanged.
 
+## Phase 9 — Sendspin player volume and mute
+
+Goal: let Music Assistant control this Android player's own output gain through
+the Sendspin player role, without changing Android's system media volume or
+adding work to the timing model. Power control is out of scope.
+
+- [x] Define Sendspin volume as per-player software gain (0–100), independent
+  of Android's system media volume; keep mute independent from volume.
+- [x] Preserve current first-install playback level with a default of 100%
+  (unity gain) and unmuted; persist subsequent volume and mute values across
+  engine recreation, reconnect, and app restart using app-owned preferences.
+- [x] Initialize the native player from the persisted values before it sends
+  its first `client/state`; publish later remote changes back through a
+  coarse-grained native/Kotlin state boundary.
+- [x] Advertise `volume` and `mute` in `client/hello.player@v1_support`; report
+  the current volume and mute values in `client/state`. Keep the state-level
+  supported-command list for adjustable static delay only.
+- [x] Apply player gain and mute in the native output path, using the Sendspin
+  volume curve and a short ramp. Keep callback work bounded, allocation-free,
+  and lock-free; clamp output samples and do not alter timestamps or frame
+  counts.
+- [x] Connect received Sendspin volume and mute commands to the native output
+  target and report the resulting state to Music Assistant.
+- [x] Keep Android hardware media-volume controls independent in this phase;
+  do not add a volume screen, slider, controller role, or hardware-key remap.
+- [x] Add deterministic native coverage for the volume curve, 0%/100% bounds,
+  ramp, mute independence, and a device-side check for native initial state.
+- [x] Verify capability serialization and volume control against a live Music
+  Assistant server: it accepts the corrected initial state, playback remains
+  stable, and remote volume changes alter audible output. The attached device
+  persisted the final 50% setting.
+- [x] Verify mute commands audibly mute/unmute, volume and mute survive reconnect
+  and app restart, and Android system media volume remains independent.
+- [ ] Check built-in, wired, Bluetooth, and USB output where available; verify
+  volume changes do not add underruns or disturb synchronization.
+
+**Acceptance:** Music Assistant can set this player's Sendspin volume and mute,
+the reported values match the active software gain, and the behavior survives
+reconnect and app restart without changing audio timing or Android's system
+volume. No power control or additional volume UI is added.
+
+## Phase 10 — Sendspin group playback controls
+
+Goal: let the user control the current synchronized Sendspin group from the
+Now Playing screen. These are group commands: other players in the group will
+also pause, resume, or stop. Sendspin `stop` resets playback to the beginning.
+
+- [x] Enable the vendored controller role in the Android CMake build and add it
+  to the native client.
+- [x] Capture the controller state's supported commands in the native engine
+  and publish a small Kotlin snapshot through the existing session/service
+  state path. Clear it on disconnect and session replacement.
+- [x] Expose only typed `PLAY`, `PAUSE`, and `STOP` actions across JNI. Send
+  commands through the native engine's client loop, and ignore actions when the
+  role is inactive or the server has not advertised that command.
+- [x] Add a Play/Pause toggle driven by the existing group playback state and a
+  separate Stop button to Now Playing. Hide or disable controls until the
+  server reports both playback state and supported commands. Keep Disconnect
+  as a separate local action.
+- [x] Rename the notification's local `Stop` action to `Disconnect` so it is
+  distinct from the new group-wide Stop command. Keep lock-screen/MediaSession
+  controls out of this phase.
+- [x] Cover command gating and cleared-capability behavior in presentation
+  tests.
+- [x] Keep progress interpolation outside the audio callback, freeze it while
+  the group is stopped, and trace server progress changes only in debug builds.
+- [ ] Verify Play, Pause, and Stop against Music Assistant with one player and
+  a multi-player group; confirm progress follows play/stop/seek, a peer follows
+  group commands, and Stop resets position.
+
+**Acceptance:** The Now Playing screen can play, pause, and stop when the
+server advertises those commands; controls reflect current group state,
+disappear when controller state becomes invalid, and do not send unsupported
+commands. Multi-player behavior matches the group-wide semantics above.
+
 ## Later codec support
 
 Introduce codecs only after PCM playback is reliable:

@@ -29,3 +29,5 @@ Run these checks on a real Android device connected to the same local network as
 ## Final smoke test
 
 - [x] Leave the device connected and playing for at least 30 minutes with the screen off; confirm continuous playback and no unexpected disconnect.
+- [x] With a server/source that negotiates 48 kHz stereo 16-bit FLAC, confirm playback starts and remains continuous on a physical device.
+- [ ] With FLAC unavailable and PCM selected, confirm PCM fallback still starts and remains continuous on a physical device.
