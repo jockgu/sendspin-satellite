@@ -502,6 +502,97 @@ server advertises those commands; controls reflect current group state,
 disappear when controller state becomes invalid, and do not send unsupported
 commands. Multi-player behavior matches the group-wide semantics above.
 
+## Phase 11 — Android MediaSession controls
+
+Goal: expose the existing server-authorized group controls through Android's
+lock screen, Bluetooth/headset media buttons, and foreground notification
+without creating a second playback state machine.
+
+- [x] Add a service-owned framework `MediaSession` that projects the current
+  `PlaybackStatus` into Android playback state, metadata, artwork, and only
+  the currently valid Play, Pause, and group-wide Stop actions.
+- [x] Keep Sendspin group state and advertised controller capabilities
+  authoritative. The Android session has no actions for unknown group state,
+  connection setup, or recovery; external commands share the service's gated
+  controller path and native queue boundary.
+- [x] Replace the foreground notification with a media-style notification that
+  has a distinct local Disconnect action alongside server-authorized group
+  transport controls. Do not add browsing, seeking, queue, Android Auto, or
+  Media3 integration.
+- [x] Decode the already-received album artwork off the main thread and discard
+  superseded generation/revision results before publishing them to the media
+  session.
+- [x] Add JVM coverage for media-session state/action/metadata projection and
+  an Android `MediaController` instrumentation test for metadata and transport
+  callback dispatch.
+- [x] Reject unsupported commands again at the native queue boundary, so stale
+  or external Android intents cannot enqueue a command after capabilities have
+  been cleared.
+- [x] Run the `MediaController` instrumentation test on an API 24+ Android
+  device.
+- [ ] Validate a real Music Assistant session: artwork/metadata update on the
+  lock screen, headset Play/Pause works, group Stop affects peer players as
+  expected, Disconnect remains local, and recovery never leaves stale system
+  media state.
+
+**Acceptance:** Android reflects the current Sendspin group rather than owning
+transport state. It publishes only supported group controls, retains a separate
+local Disconnect action, and clears lock-screen metadata/artwork during session
+replacement and failure recovery.
+
+## Phase 12 — adjustable output-delay calibration
+
+Goal: let an advanced user or a Sendspin server add a persistent per-player
+presentation delay to align this Android endpoint with other players, without
+changing audio samples, playback clocks, Android system volume, or the real-time
+callback.
+
+- [ ] Define the calibration contract as a user-adjustable, non-negative
+  per-player delay in whole milliseconds. Default to $0$ ms and clamp every
+  local, persisted, JNI, and remote value to the pinned library's supported
+  $0$–$5000$ ms range. This is intentional output scheduling latency, not a
+  clock-offset correction or a hardware latency measurement.
+- [ ] Keep timing preferences separate from `PlayerAudioState`: add one
+  app-owned persisted delay value that is loaded before the native client first
+  advertises player state, retained through service/engine recreation, and not
+  cleared by network recovery or a server reconnect.
+- [ ] Extend the native/JNI initialization contract with the persisted initial
+  delay. Configure the Sendspin player role's initial static delay, enable its
+  `set_static_delay` capability, and report its effective delay through the
+  existing coarse diagnostics/state snapshot rather than per-field JNI calls.
+- [ ] Handle server-issued static-delay changes on the native client loop,
+  update app-owned persistence, and publish the resulting effective value back
+  to Kotlin. The next `client/state` must agree with the native scheduling
+  state, including after reconnect.
+- [ ] Keep `fixed_delay_us` reserved for a known, immutable platform pipeline
+  offset; do not expose it as a user setting or combine it with calibration
+  input outside the player role's existing timing calculation.
+- [ ] Add one compact advanced calibration control to Audio diagnostics: show
+  the current delay, provide bounded $10$ ms decrease/increase steps and Reset
+  to $0$ ms, and explain neither codec nor buffering details in the normal Now
+  Playing screen. Local changes use the same native path as server changes.
+- [ ] Do not apply the setting by mutating PCM, FIFO contents, sample rate,
+  stream generation, or Oboe buffer sizes. A calibration update must remain
+  outside the audio callback and must not force a disconnect, hard resync, or
+  playback restart.
+- [ ] Add deterministic coverage for bounds, first native state, persistence,
+  reconnect, server update propagation, reset, corrected state serialization,
+  and rejection of stale generation updates. Extend JNI snapshot-layout tests
+  for the new field.
+- [ ] Validate against Music Assistant that `set_static_delay` is advertised,
+  accepted, persisted, and restored after app restart. With a peer player,
+  verify a chosen delay produces the expected relative presentation shift while
+  playback remains continuous and counters show no new underruns or hard
+  resyncs.
+- [ ] Check built-in, wired, Bluetooth, and USB outputs where available. Record
+  device-specific useful settings and confirm route change/recovery preserves
+  the configured delay without leaking pre-recovery audio.
+
+**Acceptance:** A configured or server-provided delay is reflected truthfully in
+Sendspin player state, survives reconnect and app restart, changes synchronized
+presentation timing without altering PCM or Android media volume, and can be
+reset safely to $0$ ms.
+
 ## Later codec support
 
 Introduce codecs only after PCM playback is reliable:

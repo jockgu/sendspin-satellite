@@ -1,5 +1,6 @@
 package com.nanopixel.sendspinsatellite.playback
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -21,7 +22,6 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.nanopixel.sendspinsatellite.MainActivity
@@ -45,6 +45,9 @@ class PlaybackService : Service() {
     private val connectivityManager by lazy { getSystemService(ConnectivityManager::class.java) }
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val focusPolicy = AudioFocusPolicy()
+    private lateinit var playbackMediaSession: PlaybackMediaSession
+    private var mediaSessionReleased = false
+    private var lastNotificationIdentity: NotificationIdentity? = null
     private var focusRequest: AudioFocusRequest? = null
     private var deviceCallbackRegistered = false
     private var networkCallbackRegistered = false
@@ -125,6 +128,12 @@ class PlaybackService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        playbackMediaSession = PlaybackMediaSession(
+            context = this,
+            mainHandler = mainHandler,
+            onCommand = ::dispatchMediaCommand,
+            onArtworkUpdated = { refreshNotification(force = true) },
+        )
         createNotificationChannel()
     }
 
@@ -143,7 +152,7 @@ class PlaybackService : Service() {
             ACTION_STOP -> stopPlayback()
             ACTION_PLAYBACK_COMMAND -> PlaybackCommand.entries
                 .firstOrNull { it.name == intent.getStringExtra(EXTRA_PLAYBACK_COMMAND) }
-                ?.let { session?.requestControllerCommand(it) }
+                ?.let(::dispatchMediaCommand)
         }
         return START_NOT_STICKY
     }
@@ -339,16 +348,21 @@ class PlaybackService : Service() {
         shutdownSession()
         abandonAudioFocus()
         if (hadActiveResources) publish(PlaybackStatus())
+        mediaSessionReleased = true
+        playbackMediaSession.release()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun startPlaybackForeground() {
+        val presentation = status.value.toMediaSessionPresentation()
+        playbackMediaSession.update(presentation, status.value.artwork)
+        lastNotificationIdentity = presentation.notificationIdentity
         ServiceCompat.startForeground(
             this,
             NOTIFICATION_ID,
-            notification(),
+            notification(presentation),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
         )
     }
@@ -564,7 +578,7 @@ class PlaybackService : Service() {
 
                 override fun onNowPlaying(snapshot: NowPlayingSnapshot) {
                     if (generation != sessionGeneration) return
-                    publish(status.value.copy(nowPlaying = snapshot), refreshNotification = false)
+                    publish(status.value.copy(nowPlaying = snapshot))
                 }
 
                 override fun onArtwork(snapshot: ArtworkSnapshot) {
@@ -647,36 +661,124 @@ class PlaybackService : Service() {
         session = null
     }
 
-    private fun publish(nextStatus: PlaybackStatus, refreshNotification: Boolean = true) {
+    private fun dispatchMediaCommand(command: PlaybackCommand) {
+        if (!status.value.canDispatchMediaCommand(command)) return
+        session?.requestControllerCommand(command)
+    }
+
+    private fun publish(nextStatus: PlaybackStatus) {
         status.value = nextStatus
-        if (refreshNotification && isForegroundService) {
-            getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification())
+        val update: () -> Unit = update@{
+            if (mediaSessionReleased || status.value != nextStatus) return@update
+            val presentation = nextStatus.toMediaSessionPresentation()
+            playbackMediaSession.update(presentation, nextStatus.artwork)
+            refreshNotification(presentation)
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            update()
+        } else {
+            mainHandler.post(update)
         }
     }
 
-    private fun notification() = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_stat_sendspin)
-        .setContentTitle(getString(R.string.app_name))
-        .setContentText(status.value.connectionState.label)
-        .setContentIntent(PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        ))
-        .addAction(
+    private fun refreshNotification(
+        presentation: MediaSessionPresentation = status.value.toMediaSessionPresentation(),
+        force: Boolean = false,
+    ) {
+        if (!isForegroundService) return
+        if (!force && lastNotificationIdentity == presentation.notificationIdentity) return
+        getSystemService(NotificationManager::class.java).notify(
+            NOTIFICATION_ID,
+            notification(presentation),
+        )
+        lastNotificationIdentity = presentation.notificationIdentity
+    }
+
+    private fun notification(presentation: MediaSessionPresentation): Notification {
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
+        } else {
+            Notification.Builder(this)
+        }
+        val compactActionIndexes = mutableListOf<Int>()
+        builder
+            .setSmallIcon(R.drawable.ic_stat_sendspin)
+            .setContentTitle(presentation.title ?: getString(R.string.app_name))
+            .setContentText(presentation.artist ?: presentation.connectionState.label)
+            .setContentIntent(PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            ))
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+
+        val primaryCommand = when (presentation.state) {
+            MediaSessionState.PLAYING -> PlaybackCommand.PAUSE
+            MediaSessionState.PAUSED -> PlaybackCommand.PLAY
+            else -> null
+        }?.takeIf { it in presentation.actions }
+        primaryCommand?.let { command ->
+            compactActionIndexes += 0
+            builder.addAction(
+                command.notificationIcon(),
+                command.notificationLabel(),
+                playbackCommandPendingIntent(command),
+            )
+        }
+        if (PlaybackCommand.STOP in presentation.actions) {
+            builder.addAction(
+                PlaybackCommand.STOP.notificationIcon(),
+                PlaybackCommand.STOP.notificationLabel(),
+                playbackCommandPendingIntent(PlaybackCommand.STOP),
+            )
+        }
+        builder.addAction(
             0,
             "Disconnect",
             PendingIntent.getService(
                 this,
-                1,
+                REQUEST_DISCONNECT,
                 Intent(this, PlaybackService::class.java).setAction(ACTION_STOP),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             ),
         )
-        .setOngoing(true)
-        .setOnlyAlertOnce(true)
-        .build()
+        builder.setStyle(
+            Notification.MediaStyle()
+                .setMediaSession(playbackMediaSession.token)
+                .setShowActionsInCompactView(*compactActionIndexes.toIntArray()),
+        )
+        return builder.build()
+    }
+
+    private fun playbackCommandPendingIntent(command: PlaybackCommand): PendingIntent =
+        PendingIntent.getService(
+            this,
+            command.requestCode(),
+            Intent(this, PlaybackService::class.java)
+                .setAction(ACTION_PLAYBACK_COMMAND)
+                .putExtra(EXTRA_PLAYBACK_COMMAND, command.name),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+
+    private fun PlaybackCommand.notificationIcon(): Int = when (this) {
+        PlaybackCommand.PLAY -> android.R.drawable.ic_media_play
+        PlaybackCommand.PAUSE -> android.R.drawable.ic_media_pause
+        PlaybackCommand.STOP -> android.R.drawable.ic_media_pause
+    }
+
+    private fun PlaybackCommand.notificationLabel(): String = when (this) {
+        PlaybackCommand.PLAY -> "Play"
+        PlaybackCommand.PAUSE -> "Pause"
+        PlaybackCommand.STOP -> "Stop group"
+    }
+
+    private fun PlaybackCommand.requestCode(): Int = when (this) {
+        PlaybackCommand.PLAY -> REQUEST_PLAY
+        PlaybackCommand.PAUSE -> REQUEST_PAUSE
+        PlaybackCommand.STOP -> REQUEST_GROUP_STOP
+    }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -705,6 +807,10 @@ class PlaybackService : Service() {
         const val EXTRA_PLAYBACK_COMMAND = "playback_command"
         const val NOTIFICATION_CHANNEL_ID = "playback"
         const val NOTIFICATION_ID = 1
+        private const val REQUEST_PLAY = 10
+        private const val REQUEST_PAUSE = 11
+        private const val REQUEST_GROUP_STOP = 12
+        private const val REQUEST_DISCONNECT = 13
         private const val TAG = "PlaybackService"
         private const val DIAGNOSTICS_LOG_INTERVAL_MS = 30_000L
         private const val DISCOVERY_SELECTION_TIMEOUT_MS = 30_000L

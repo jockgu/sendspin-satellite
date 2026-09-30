@@ -133,6 +133,7 @@ private:
     void record_reconnect_completion();
     void drain_playback_feedback();
     void run();
+    [[nodiscard]] bool controller_command_supported_locked(SendspinControllerCommand command) const;
 
     OboePcmOutput output_;
     SendspinPcmListener listener_;

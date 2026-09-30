@@ -120,6 +120,10 @@ bool NativePlaybackEngine::request_controller_command(
         current_state != State::Playing) {
         return false;
     }
+    {
+        std::lock_guard lock(controller_capabilities_mutex_);
+        if (!controller_command_supported_locked(command)) return false;
+    }
     std::lock_guard lock(control_mutex_);
     if (disconnect_requested_) return false;
     // ponytail: cap the UI command backlog at eight; add a dedicated queue only if command
@@ -127,6 +131,19 @@ bool NativePlaybackEngine::request_controller_command(
     if (pending_controller_commands_.size() >= kMaxPendingControllerCommands) return false;
     pending_controller_commands_.push_back(command);
     return true;
+}
+bool NativePlaybackEngine::controller_command_supported_locked(
+    const SendspinControllerCommand command) const {
+    switch (command) {
+        case SendspinControllerCommand::PLAY:
+            return controller_capabilities_.play;
+        case SendspinControllerCommand::PAUSE:
+            return controller_capabilities_.pause;
+        case SendspinControllerCommand::STOP:
+            return controller_capabilities_.stop;
+        default:
+            return false;
+    }
 }
 void NativePlaybackEngine::request_recovery(const PlaybackRecoveryState::RecoveryCause cause) {
     recovery_state_.request_recovery(cause);
