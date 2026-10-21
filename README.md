@@ -65,4 +65,5 @@ Install and test on a physical Android device for meaningful playback validation
 
 - Product and engineering direction: `AGENTS.md`, `NORTH_STAR.md`.
 - Implementation phases and acceptance targets: `TODO.md`.
+- Sandpiper rebrand checklist: [REBRAND_TODO.md](REBRAND_TODO.md).
 - Native host-test workflow: `.github/workflows/native-tests.yml`.
