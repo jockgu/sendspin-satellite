@@ -36,4 +36,11 @@ data class ConnectionUiState(
     val nowPlaying: NowPlayingSnapshot = NowPlayingSnapshot(),
     val artwork: ArtworkSnapshot = ArtworkSnapshot(),
     val supportedPlaybackCommands: Set<PlaybackCommand> = emptySet(),
+    val pairingCode: String? = null,
+    val pairingRevision: Long = 0,
+    val pairingActive: Boolean = false,
+    val pairingWindowOpen: Boolean = false,
+    val pairingFailed: Boolean = false,
+    val pairingFailureReason: Int? = null,
+    val serverPaired: Boolean? = null,
 )

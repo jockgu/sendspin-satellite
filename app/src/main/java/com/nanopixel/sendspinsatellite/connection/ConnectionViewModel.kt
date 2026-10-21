@@ -174,6 +174,10 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
         PlaybackService.sendPlaybackCommand(app, command)
     }
 
+    fun confirmPairingWindow() = PlaybackService.confirmPairingWindow(app)
+
+    fun cancelPairingWindow() = PlaybackService.cancelPairingWindow(app)
+
     fun forgetServer() {
         preferences.forgetServer()
         automaticConnectionAttempted = false

@@ -22,6 +22,7 @@ class SendspinSession(
         fun onNowPlaying(snapshot: NowPlayingSnapshot)
         fun onArtwork(snapshot: ArtworkSnapshot)
         fun onControllerCommands(commands: Set<PlaybackCommand>)
+        fun onPairingUi(snapshot: NativePlaybackEngine.PairingUiSnapshot)
     }
 
     enum class SessionState {
@@ -53,6 +54,7 @@ class SendspinSession(
     private var lastNowPlayingRevision = -1L
     private var lastArtworkRevision = -1L
     private var lastControllerCapabilitiesRevision = -1L
+    private var lastPairingUiRevision = -1L
     private var lastLoggedProgressPosition = Long.MIN_VALUE
     private var lastLoggedProgressDuration = Long.MIN_VALUE
     private var lastLoggedPlaybackSpeed = Int.MIN_VALUE
@@ -66,7 +68,12 @@ class SendspinSession(
     fun connect(address: String) {
         if (!engine.connect(address)) {
             listener.onState(SessionState.ERROR)
-            listener.onDiagnostics(Diagnostics(message = "Unable to start native audio output."))
+            val message = if (engine.diagnostics()?.secureStorageError == true) {
+                "Secure Sendspin identity storage is unavailable. Check device storage and reconnect."
+            } else {
+                "Unable to start native audio output."
+            }
+            listener.onDiagnostics(Diagnostics(message = message))
         }
     }
 
@@ -80,6 +87,10 @@ class SendspinSession(
 
     fun requestControllerCommand(command: PlaybackCommand): Boolean =
         engine.requestControllerCommand(command)
+
+    fun confirmPairingWindow() = engine.confirmPairingWindow()
+
+    fun cancelPairingWindow() = engine.cancelPairingWindow()
 
     fun close() {
         engine.disconnect()
@@ -97,6 +108,7 @@ class SendspinSession(
         publishNowPlaying()
         publishArtwork()
         publishControllerCapabilities()
+        publishPairingUi()
     }
 
     private fun publishState() {
@@ -121,7 +133,18 @@ class SendspinSession(
     private fun publishDiagnostics() {
         val snapshot = engine.diagnostics() ?: return
         if (snapshot.state == NativePlaybackEngine.State.STOPPED) return
-        listener.onDiagnostics(Diagnostics(nativeSnapshot = snapshot))
+        listener.onDiagnostics(
+            Diagnostics(
+                message = when {
+                    snapshot.secureStorageError ->
+                        "Secure Sendspin identity storage is unavailable. Check device storage and reconnect."
+                    snapshot.lastFailure == FAILURE_HANDSHAKE_TIMEOUT ->
+                        "The encrypted Sendspin connection could not be established. Check server compatibility, pairing, and network."
+                    else -> null
+                },
+                nativeSnapshot = snapshot,
+            ),
+        )
     }
 
     private fun publishNowPlaying() {
@@ -163,5 +186,15 @@ class SendspinSession(
         val capabilities = engine.controllerCapabilitiesIfChanged(lastControllerCapabilitiesRevision) ?: return
         lastControllerCapabilitiesRevision = capabilities.revision
         listener.onControllerCommands(capabilities.supportedCommands)
+    }
+
+    private fun publishPairingUi() {
+        val snapshot = engine.pairingUiIfChanged(lastPairingUiRevision) ?: return
+        lastPairingUiRevision = snapshot.revision
+        listener.onPairingUi(snapshot)
+    }
+
+    private companion object {
+        const val FAILURE_HANDSHAKE_TIMEOUT = 3
     }
 }

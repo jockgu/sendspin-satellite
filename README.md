@@ -29,36 +29,28 @@ Known alpha limitations:
 
 ## Sendspin compatibility
 
-Sendspin Satellite supports the encrypted Sendspin protocol generation (core
-protocol v1 and `player@v1`). Earlier pre-encryption Sendspin implementations
-are not supported.
+Sendspin Satellite uses `sendspin-cpp` v0.9.5 and requires encrypted Sendspin
+connections (core protocol v1 and `player@v1`). The minimum validated Music
+Assistant version is **2.10.7**. Earlier versions are unverified, and releases
+that only support legacy cleartext Sendspin connections cannot connect. The app
+has no cleartext fallback.
+
+The first encrypted release changes the satellite's client identity from the
+previous Android ID-based value. Music Assistant may show a new player entry;
+remove the old entry and pair the new one if needed.
 
 Compatible additive protocol extensions are tolerated where the Sendspin
 specification defines them. A future core or role protocol version is supported
 only after deliberate interoperability testing with Music Assistant; it is not
 assumed compatible merely because it is newer.
 
-### Alpha test target
+### Compatibility validation
 
-This alpha branch now assumes server behavior compatible with:
-- **aiosendspin 9.1.1** (as shipped with Music Assistant 2.10.2 dependency set)
-
-Reason:
-- The client-side patch migrated from legacy top-level `state` to `payload.available` and includes required player timing fields expected by modern server validation.
-
-If you test against older Sendspin/aiosendspin servers, availability and playback behavior may not match this branch.
-
-## Compatibility matrix (alpha)
-
-| Music Assistant | aiosendspin | Tested on | Connect | Available | Playback |
-| --- | --- | --- | --- | --- | --- |
-| 2.10.2 | 9.1.1 | Android Emulator | Yes | Yes | Partial (source-dependent; physical recovery pending) |
-| 2.10.2 | 9.1.1 | Amazon Echo Show 5 (2nd gen) | Yes | Yes | Yes |
-
-Notes:
-- This matrix reflects known-tested combinations only.
-- If your MA instance differs, treat behavior as unverified until tested.
-- Future entries should include whether connection, availability, and playback were each validated.
+The earliest validated combination is **Music Assistant 2.10.7** on an
+**Amazon Echo Show 5 (2nd generation)**. Pairing with the code shown by the app
+succeeded and music played normally. Earlier server versions remain unverified;
+the previous 2.10.2 cleartext test results do not apply to this encrypted-only
+client.
 
 ## Build
 

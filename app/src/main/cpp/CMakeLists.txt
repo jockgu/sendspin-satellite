@@ -33,15 +33,19 @@ if(ANDROID)
     find_package(oboe REQUIRED CONFIG)
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(SENDSPIN_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(SENDSPIN_ENABLE_PLAYER ON CACHE BOOL "" FORCE)
     set(SENDSPIN_ENABLE_CONTROLLER ON CACHE BOOL "" FORCE)
     set(SENDSPIN_ENABLE_METADATA ON CACHE BOOL "" FORCE)
     set(SENDSPIN_ENABLE_COLOR OFF CACHE BOOL "" FORCE)
     set(SENDSPIN_ENABLE_ARTWORK ON CACHE BOOL "" FORCE)
     set(SENDSPIN_ENABLE_VISUALIZER OFF CACHE BOOL "" FORCE)
+    set(SENDSPIN_ENABLE_SOURCE OFF CACHE BOOL "" FORCE)
+    set(SENDSPIN_ENABLE_OPUS OFF CACHE BOOL "" FORCE)
     add_subdirectory(third_party/sendspin-cpp EXCLUDE_FROM_ALL)
 
     add_library(sendspin_native SHARED
         native_clock_jni.cpp
+        jni_persistence_provider.cpp
         native_playback_engine.cpp
         oboe_pcm_output.cpp
         sendspin_pcm_listener.cpp)

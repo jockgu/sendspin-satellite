@@ -223,6 +223,33 @@ jobject artwork_snapshot(JNIEnv* env, const sendspin::ArtworkState::Snapshot& sn
     return result;
 }
 
+jobject pairing_ui_snapshot(JNIEnv* env, const NativePlaybackEngine::PairingUiSnapshot& snapshot) {
+    const auto snapshot_class = env->FindClass(
+        "com/nanopixel/sendspinsatellite/protocol/NativePlaybackEngine$PairingUiSnapshot");
+    if (snapshot_class == nullptr) return nullptr;
+    const auto constructor = env->GetMethodID(snapshot_class, "<init>",
+        "(JLjava/lang/String;ZZZIZZ)V");
+    if (constructor == nullptr) {
+        env->DeleteLocalRef(snapshot_class);
+        return nullptr;
+    }
+    const std::optional<std::string> code = snapshot.code.empty()
+        ? std::nullopt
+        : std::optional<std::string>(snapshot.code);
+    const auto java_code = utf8_string(env, code);
+    const auto result = env->NewObject(snapshot_class, constructor,
+        static_cast<jlong>(snapshot.revision), java_code,
+        snapshot.pairing_active ? JNI_TRUE : JNI_FALSE,
+        snapshot.pairing_window_open ? JNI_TRUE : JNI_FALSE,
+        snapshot.last_pairing_failed ? JNI_TRUE : JNI_FALSE,
+        static_cast<jint>(snapshot.last_pairing_failure_reason),
+        snapshot.server_trust_known ? JNI_TRUE : JNI_FALSE,
+        snapshot.server_paired ? JNI_TRUE : JNI_FALSE);
+    if (java_code != nullptr) env->DeleteLocalRef(java_code);
+    env->DeleteLocalRef(snapshot_class);
+    return result;
+}
+
 }  // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
@@ -269,27 +296,22 @@ extern "C" JNIEXPORT jlong JNICALL
 Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeCreate(
     JNIEnv* env,
     jclass,
-    jstring client_id,
+    jobject credential_store,
     jstring player_name,
     jint initial_volume,
     jboolean initial_muted) {
-    if (client_id == nullptr || player_name == nullptr) {
-        return 0;
-    }
-    const char* client_chars = env->GetStringUTFChars(client_id, nullptr);
-    if (client_chars == nullptr) {
+    if (credential_store == nullptr || player_name == nullptr) {
         return 0;
     }
     const char* player_chars = env->GetStringUTFChars(player_name, nullptr);
     if (player_chars == nullptr) {
-        env->ReleaseStringUTFChars(client_id, client_chars);
         return 0;
     }
     const auto volume = static_cast<uint8_t>(std::clamp(initial_volume, 0, 100));
     auto* engine = new NativePlaybackEngine(
-        client_chars, player_chars, volume, initial_muted == JNI_TRUE);
+        std::make_unique<sendspin::JniPersistenceProvider>(env, credential_store),
+        player_chars, volume, initial_muted == JNI_TRUE);
     env->ReleaseStringUTFChars(player_name, player_chars);
-    env->ReleaseStringUTFChars(client_id, client_chars);
     return reinterpret_cast<jlong>(engine);
 }
 
@@ -382,6 +404,7 @@ Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeDiagnos
         static_cast<jlong>(snapshot.output_xrun_count),
         static_cast<jlong>(snapshot.player_volume),
         snapshot.player_muted ? 1 : 0,
+        snapshot.secure_storage_error ? 1 : 0,
     };
     auto result = env->NewLongArray(static_cast<jsize>(std::size(values)));
     if (result == nullptr) return nullptr;
@@ -433,4 +456,25 @@ Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeRequest
     return reinterpret_cast<NativePlaybackEngine*>(handle)->request_controller_command(*decoded)
         ? JNI_TRUE
         : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeConfirmPairingWindow(
+    JNIEnv*, jclass, jlong handle) {
+    reinterpret_cast<NativePlaybackEngine*>(handle)->confirm_pairing_window();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativeCancelPairingWindow(
+    JNIEnv*, jclass, jlong handle) {
+    reinterpret_cast<NativePlaybackEngine*>(handle)->cancel_pairing_window();
+}
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_nanopixel_sendspinsatellite_protocol_NativePlaybackEngine_nativePairingUiIfChanged(
+    JNIEnv* env, jclass, jlong handle, jlong known_revision) {
+    const auto snapshot = reinterpret_cast<NativePlaybackEngine*>(handle)->pairing_ui_after(
+        static_cast<uint64_t>(known_revision));
+    if (!snapshot.has_value()) return nullptr;
+    return pairing_ui_snapshot(env, *snapshot);
 }

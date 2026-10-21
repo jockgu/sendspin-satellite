@@ -19,6 +19,13 @@ data class PlaybackStatus(
     val nowPlaying: NowPlayingSnapshot = NowPlayingSnapshot(),
     val artwork: ArtworkSnapshot = ArtworkSnapshot(),
     val supportedPlaybackCommands: Set<PlaybackCommand> = emptySet(),
+    val pairingCode: String? = null,
+    val pairingRevision: Long = 0,
+    val pairingActive: Boolean = false,
+    val pairingWindowOpen: Boolean = false,
+    val pairingFailed: Boolean = false,
+    val pairingFailureReason: Int? = null,
+    val serverPaired: Boolean? = null,
 )
 
 fun PlaybackStatus.toUiState(current: ConnectionUiState) = current.copy(
@@ -33,4 +40,11 @@ fun PlaybackStatus.toUiState(current: ConnectionUiState) = current.copy(
     nowPlaying = nowPlaying,
     artwork = artwork,
     supportedPlaybackCommands = supportedPlaybackCommands,
+    pairingCode = pairingCode,
+    pairingRevision = pairingRevision,
+    pairingActive = pairingActive,
+    pairingWindowOpen = pairingWindowOpen,
+    pairingFailed = pairingFailed,
+    pairingFailureReason = pairingFailureReason,
+    serverPaired = serverPaired,
 )

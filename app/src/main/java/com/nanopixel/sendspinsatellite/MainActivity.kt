@@ -47,6 +47,8 @@ class MainActivity : ComponentActivity() {
                 onDisconnect = connectionViewModel::disconnect,
                 onForgetServer = connectionViewModel::forgetServer,
                 onPlaybackCommand = connectionViewModel::sendPlaybackCommand,
+                onConfirmPairingWindow = connectionViewModel::confirmPairingWindow,
+                onCancelPairingWindow = connectionViewModel::cancelPairingWindow,
             )
         }
     }

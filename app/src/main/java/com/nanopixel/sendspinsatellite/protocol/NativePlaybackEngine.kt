@@ -1,7 +1,6 @@
 package com.nanopixel.sendspinsatellite.protocol
 
 import android.content.Context
-import android.provider.Settings
 import com.nanopixel.sendspinsatellite.connection.PlayerAudioState
 import com.nanopixel.sendspinsatellite.playback.ArtworkSnapshot
 import com.nanopixel.sendspinsatellite.playback.NowPlayingSnapshot
@@ -12,8 +11,9 @@ class NativePlaybackEngine(
     playerName: String,
     initialPlayerAudioState: PlayerAudioState = PlayerAudioState(),
 ) : AutoCloseable {
+    private val credentialStore = SendspinCredentialStore(context.applicationContext)
     private var handle = nativeCreate(
-        resolveClientId(context),
+        credentialStore,
         playerName,
         initialPlayerAudioState.volume.coerceIn(0, 100),
         initialPlayerAudioState.muted,
@@ -62,7 +62,12 @@ class NativePlaybackEngine(
             outputXruns = values[29].toInt(),
             playerVolume = values[30].toInt(),
             playerMuted = values[31] != 0L,
+            secureStorageError = values[32] != 0L,
         )
+    }
+    fun pairingUiIfChanged(knownRevision: Long): PairingUiSnapshot? {
+        if (handle == 0L) return null
+        return nativePairingUiIfChanged(requireOpen(), knownRevision)
     }
     fun nowPlayingIfChanged(knownRevision: Long): NowPlayingSnapshot? {
         if (handle == 0L) return null
@@ -86,6 +91,12 @@ class NativePlaybackEngine(
     fun requestControllerCommand(command: PlaybackCommand): Boolean {
         if (handle == 0L) return false
         return nativeRequestControllerCommand(requireOpen(), command.nativeValue())
+    }
+    fun confirmPairingWindow() {
+        if (handle != 0L) nativeConfirmPairingWindow(handle)
+    }
+    fun cancelPairingWindow() {
+        if (handle != 0L) nativeCancelPairingWindow(handle)
     }
     fun requestOutputRecovery() {
         if (handle != 0L) nativeRequestRecovery(handle, RECOVERY_CAUSE_ROUTE_CHANGE)
@@ -142,6 +153,18 @@ class NativePlaybackEngine(
         val outputXruns: Int,
         val playerVolume: Int = 100,
         val playerMuted: Boolean = false,
+        val secureStorageError: Boolean = false,
+    )
+
+    data class PairingUiSnapshot(
+        val revision: Long,
+        val code: String?,
+        val pairingActive: Boolean,
+        val pairingWindowOpen: Boolean,
+        val lastPairingFailed: Boolean,
+        val pairingFailureReason: Int,
+        val serverTrustKnown: Boolean,
+        val serverPaired: Boolean,
     )
 
     data class ControllerCapabilities(
@@ -157,13 +180,8 @@ class NativePlaybackEngine(
 
     private companion object {
         init { System.loadLibrary("sendspin_native") }
-        private fun resolveClientId(context: Context): String {
-            val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-            return if (androidId.isNullOrBlank()) "android-unknown-client" else "android-$androidId"
-        }
-
         @JvmStatic private external fun nativeCreate(
-            clientId: String,
+            credentialStore: SendspinCredentialStore,
             playerName: String,
             initialVolume: Int,
             initialMuted: Boolean,
@@ -185,14 +203,20 @@ class NativePlaybackEngine(
             handle: Long,
             knownRevision: Long,
         ): LongArray?
+        @JvmStatic private external fun nativePairingUiIfChanged(
+            handle: Long,
+            knownRevision: Long,
+        ): PairingUiSnapshot?
         @JvmStatic private external fun nativeRequestControllerCommand(handle: Long, command: Int): Boolean
+        @JvmStatic private external fun nativeConfirmPairingWindow(handle: Long)
+        @JvmStatic private external fun nativeCancelPairingWindow(handle: Long)
         @JvmStatic private external fun nativeRequestRecovery(handle: Long, cause: Int)
         @JvmStatic private external fun nativeSuspendForFocus(handle: Long)
         @JvmStatic private external fun nativeResumeFromFocus(handle: Long)
         @JvmStatic private external fun nativeState(handle: Long): Int
 
         private const val RECOVERY_CAUSE_ROUTE_CHANGE = 1
-        private const val DIAGNOSTICS_SIZE = 32
+        private const val DIAGNOSTICS_SIZE = 33
         private const val CONTROLLER_CAPABILITIES_SIZE = 4
         private const val NATIVE_COMMAND_PLAY = 0
         private const val NATIVE_COMMAND_PAUSE = 1

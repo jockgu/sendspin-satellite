@@ -593,6 +593,96 @@ Sendspin player state, survives reconnect and app restart, changes synchronized
 presentation timing without altering PCM or Android media volume, and can be
 reset safely to $0$ ms.
 
+## Phase 13 — sendspin-cpp v0.9.5 and authenticated pairing
+
+Goal: replace the pre-encryption v0.8-based fork with upstream `sendspin-cpp`
+v0.9.5, retain only the fork changes this app still needs, and make the Android
+client identity and pairing credentials durable across service and device
+restarts. This app will support encrypted Sendspin only: no legacy protocol
+mode and no plaintext fallback. v0.9.0 is a protocol/API break: it requires the
+encrypted Sendspin 1.0.0-rc1 protocol and does not connect to earlier servers.
+See the upstream [v0.9.0 migration notes](https://github.com/Sendspin/sendspin-cpp/releases/tag/v0.9.0)
+and [v0.9.5 release notes](https://github.com/Sendspin/sendspin-cpp/releases/tag/v0.9.5).
+
+### Refresh the fork and pin
+
+- [x] Compare the fork with upstream `v0.9.5` (tag commit `b95cf85`) and port
+  each still-needed fork change onto that base. In particular, audit the stream
+  clear callback, playback-state publication, buffer tuning, persistent player
+  volume, and FLAC support against upstream before retaining local patches. The
+  only retained library patch restores a stream-clear callback needed to flush
+  the Android output FIFO; the other changes are present upstream or in app
+  configuration.
+- [x] Remove the v0.8 plaintext `client/hello` path as part of the migration.
+  Keep the encrypted handshake as the only connection mode and never retry a
+  failed encrypted connection as a legacy plaintext session.
+- [x] Build the updated library for every Android ABI we ship. Check the new
+  Noise C dependency and all codec/network dependencies with the Android NDK,
+  CMake, and Gradle build, and keep optional roles/codecs disabled where the app
+  does not use them. `:app:assembleDebug` passed for the configured ABIs.
+- [ ] Publish the local fork branch and its updated gitlink after review. The
+  fork branch is based on upstream tag `v0.9.5` (`b95cf85`) and contains only
+  the Android stream-clear callback patch.
+
+### Migrate the Android client
+
+- [x] Update native client construction and JNI for v0.9.0+: remove the
+  configured string `client_id`; let the library own its persistent X25519
+  identity and read the public client ID from the started client when needed.
+  Remove the `ANDROID_ID`-based `resolveClientId()` path.
+- [x] Treat this as a one-time identity change: the current app does not persist
+  v0.8 pairing records, and the new identity will differ from its old
+  `ANDROID_ID` client ID. Document that an old server-side device entry may need
+  to be removed; keep the new identity stable from then on.
+- [x] Implement the new opaque persistence-provider API (`load_blob`,
+  `save_blob`, `commit`) with durable, thread-safe Android storage protected by
+  an Android Keystore key. Persist the identity, Pairing PSK, per-server trust
+  records, and any library-owned state; make writes atomic, handle corrupt or
+  missing blobs safely, and exclude secrets from Android backup and logs.
+- [x] Keep unpaired access disabled. Configure a user-visible pairing method
+  suitable for Android (recommended first path: dynamic digits shown in the
+  app), and surface pairing started/pending/succeeded/failed, trust changes,
+  and pairing-code clear events through a coarse native snapshot/JNI boundary.
+- [x] Add the smallest usable pairing UI: show the temporary code and server,
+  explain what action to take on the server, and clear the code on completion,
+  cancellation, disconnect, or failure. Show whether the active server is
+  paired; don't add a general credential manager unless the library requires
+  one for recovery.
+- [x] Carry typed pairing failure reasons and trust state through
+  `NativePlaybackEngine`, `SendspinSession`, `PlaybackService`, and connection
+  UI state. v0.9.5 does not expose a typed remote authorization/Noise failure
+  callback, so silent encrypted-handshake failures remain generic encrypted
+  connection failures rather than guessed causes. Preserve the existing
+  bounded reconnect and stream-generation rules.
+- [x] Review v0.9.5's volume/mute command controls against the app's current
+  player-volume behavior; retain the existing behavior unless there is a clear
+  product reason to withdraw server commands. Do not add a new setting just to
+  expose the library option.
+- [x] Keep v0.9.5's opt-in plaintext message trace disabled in normal app builds;
+  use it only in deliberate protocol-conformance debugging.
+- [x] Review all changed player/config/listener APIs used by the Oboe output,
+  controller, metadata, artwork, clock diagnostics, and recovery loop. Keep
+  protocol work off the audio callback and verify the v0.9.5 callback/thread
+  contract before adding any JNI or storage bridge.
+- [x] Update `README.md` and the compatibility section to state that encrypted
+  Sendspin is required and legacy non-encrypted servers are unsupported. State
+  the earliest validated Music Assistant version explicitly. The earlier
+  2.11.0b4 baseline from the v0.9.0 release notes is superseded by a successful
+  encrypted pairing and playback check on Music Assistant 2.10.7.
+- [ ] Add coverage for stable identity across engine/service/app restart,
+  persistence failure and recovery, pairing event/state transitions, successful
+  reconnect after pairing, and the existing playback recovery behavior across
+  authenticated reconnects.
+- [x] Physical device smoke test: pairing through the code shown by the device
+  succeeded and music played normally on Music Assistant 2.10.7 with an Amazon
+  Echo Show 5 (2nd generation).
+
+**Acceptance:** A newly installed device gets a stable, private Sendspin
+identity; it can complete the supported pairing flow and reconnect as a trusted
+client after process/device restart; every connection uses the encrypted
+protocol with no plaintext mode or downgrade; and authenticated reconnects
+preserve the current playback recovery and audio-generation guarantees.
+
 ## Later codec support
 
 Introduce codecs only after PCM playback is reliable:

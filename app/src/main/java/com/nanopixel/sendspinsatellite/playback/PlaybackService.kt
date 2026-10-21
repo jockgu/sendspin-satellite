@@ -150,6 +150,8 @@ class PlaybackService : Service() {
             ACTION_DISCOVER -> discoverServers(intent.getStringExtra(EXTRA_PLAYER_NAME).orEmpty())
             ACTION_SELECT_DISCOVERED -> selectDiscoveredServer(intent.getStringExtra(EXTRA_SERVER_ID).orEmpty())
             ACTION_STOP -> stopPlayback()
+            ACTION_CONFIRM_PAIRING_WINDOW -> session?.confirmPairingWindow()
+            ACTION_CANCEL_PAIRING_WINDOW -> session?.cancelPairingWindow()
             ACTION_PLAYBACK_COMMAND -> PlaybackCommand.entries
                 .firstOrNull { it.name == intent.getStringExtra(EXTRA_PLAYBACK_COMMAND) }
                 ?.let(::dispatchMediaCommand)
@@ -590,6 +592,26 @@ class PlaybackService : Service() {
                     if (generation != sessionGeneration) return
                     publish(status.value.copy(supportedPlaybackCommands = commands))
                 }
+
+                override fun onPairingUi(snapshot: NativePlaybackEngine.PairingUiSnapshot) {
+                    if (generation != sessionGeneration) return
+                    publish(status.value.copy(
+                        pairingCode = snapshot.code,
+                        pairingRevision = snapshot.revision,
+                        pairingActive = snapshot.pairingActive,
+                        pairingWindowOpen = snapshot.pairingWindowOpen,
+                        pairingFailed = snapshot.lastPairingFailed,
+                        pairingFailureReason = snapshot.pairingFailureReason.takeIf {
+                            snapshot.lastPairingFailed
+                        },
+                        serverPaired = snapshot.serverPaired.takeIf { snapshot.serverTrustKnown },
+                        detail = if (snapshot.lastPairingFailed) {
+                            "Pairing did not complete. Try pairing again from Music Assistant."
+                        } else {
+                            status.value.detail
+                        },
+                    ))
+                }
             },
         ).also { session = it }
     }
@@ -799,6 +821,8 @@ class PlaybackService : Service() {
         const val ACTION_DISCOVER = "com.nanopixel.sendspinsatellite.action.DISCOVER"
         const val ACTION_SELECT_DISCOVERED = "com.nanopixel.sendspinsatellite.action.SELECT_DISCOVERED"
         const val ACTION_STOP = "com.nanopixel.sendspinsatellite.action.STOP"
+        const val ACTION_CONFIRM_PAIRING_WINDOW = "com.nanopixel.sendspinsatellite.action.CONFIRM_PAIRING_WINDOW"
+        const val ACTION_CANCEL_PAIRING_WINDOW = "com.nanopixel.sendspinsatellite.action.CANCEL_PAIRING_WINDOW"
         const val ACTION_PLAYBACK_COMMAND = "com.nanopixel.sendspinsatellite.action.PLAYBACK_COMMAND"
         const val EXTRA_SERVER_ADDRESS = "server_address"
         const val EXTRA_PLAYER_NAME = "player_name"
@@ -883,6 +907,18 @@ class PlaybackService : Service() {
                 Intent(context, PlaybackService::class.java)
                     .setAction(ACTION_PLAYBACK_COMMAND)
                     .putExtra(EXTRA_PLAYBACK_COMMAND, command.name),
+            )
+        }
+
+        internal fun confirmPairingWindow(context: Context) {
+            context.startService(
+                Intent(context, PlaybackService::class.java).setAction(ACTION_CONFIRM_PAIRING_WINDOW),
+            )
+        }
+
+        internal fun cancelPairingWindow(context: Context) {
+            context.startService(
+                Intent(context, PlaybackService::class.java).setAction(ACTION_CANCEL_PAIRING_WINDOW),
             )
         }
 

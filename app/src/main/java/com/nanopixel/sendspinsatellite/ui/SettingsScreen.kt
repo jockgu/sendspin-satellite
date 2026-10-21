@@ -84,6 +84,10 @@ internal fun SettingsScreen(
         Spacer(Modifier.height(8.dp))
         Text(state.savedServer?.name ?: "Preferred server", style = MaterialTheme.typography.titleMedium)
         Text(state.savedServer?.address.orEmpty(), style = MaterialTheme.typography.bodySmall)
+        state.serverPaired?.let { paired ->
+            Spacer(Modifier.height(8.dp))
+            Text(if (paired) "Secure connection: paired" else "Secure connection: pairing required")
+        }
         Spacer(Modifier.height(16.dp))
         OutlinedButton(onClick = onDiscover, modifier = Modifier.fillMaxWidth()) {
             Text("Find a different server")
