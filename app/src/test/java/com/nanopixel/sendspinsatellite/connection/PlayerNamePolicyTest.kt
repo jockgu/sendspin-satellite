@@ -10,7 +10,7 @@ class PlayerNamePolicyTest {
     @Test
     fun `default name includes the device model`() {
         assertEquals(
-            "Sendspin Satellite Pixel 6",
+            "Sandpiper Pixel 6",
             PlayerNamePolicy.defaultFor(" Pixel   6 "),
         )
     }

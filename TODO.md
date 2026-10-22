@@ -1,4 +1,4 @@
-# Sendspin Satellite implementation plan
+# Sandpiper implementation plan
 
 This project should grow through small, verifiable vertical slices. Playback
 reliability and timing correctness take priority over UI breadth and feature

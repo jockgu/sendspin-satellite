@@ -195,7 +195,7 @@ fun diagnosticLongValue(value: Long): String = if (value < 0) "Unavailable" else
 
 object AudioDiagnosticReportFormatter {
     fun format(diagnostics: AlphaAudioDiagnostics): String = buildString {
-        appendLine("Sendspin Satellite alpha audio diagnostics")
+        appendLine("Sandpiper alpha audio diagnostics")
         appendLine("Actual negotiated Oboe output")
         val native = diagnostics.nativeSnapshot
         if (native == null) {

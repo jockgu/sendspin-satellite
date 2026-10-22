@@ -10,10 +10,20 @@ Working description: **A Sendspin player for Android.**
 - [x] Create `codex/sandpiper-rebrand` from the current `alpha` checkout.
 - [x] Identify the existing product names, icon resources, and persistent app
   identity before planning changes.
-- [ ] Settle the Sandpiper wordmark, bird mark, and a small colour palette before
+- [x] Settle the Sandpiper wordmark, bird mark, and a small colour palette before
   replacing assets. The mark should work at launcher and notification sizes.
-- [ ] Record the agreed artwork and naming decisions here as implementation
+- [x] Record the agreed artwork and naming decisions here as implementation
   progresses.
+
+### Initial identity decisions
+
+- Wordmark: **Sandpiper**, in a clear, unembellished sans-serif.
+- Bird mark: a compact side-profile sandpiper with a long bill and simple,
+  recognizable legs and wing shape; use a single-color silhouette for the
+  notification version.
+- Palette: deep navy `#0B1020`, warm sand `#E6C98F`, and pale ivory `#F7F3E8`.
+- Keep the existing application ID and technical identifiers; only public
+  product-facing names change.
 
 ## 1. Protect upgrades and existing players
 
@@ -34,18 +44,18 @@ Working description: **A Sendspin player for Android.**
 
 ## 2. Rename the public product
 
-- [ ] Change `app_name` in `app/src/main/res/values/strings.xml` to `Sandpiper`.
+- [x] Change `app_name` in `app/src/main/res/values/strings.xml` to `Sandpiper`.
   Check its use in the launcher, Android app settings, and notification fallback.
-- [ ] Replace product wording in `ConnectionScreen.kt`, `SettingsScreen.kt`, and
+- [x] Replace product wording in `ConnectionScreen.kt`, `SettingsScreen.kt`, and
   `ConnectionViewModel.kt`, including setup and local-network permission text.
   Use string resources for the wording changed in this pass.
-- [ ] Update `PlayerNamePolicy.defaultName` and its existing test expectations.
+- [x] Update `PlayerNamePolicy.defaultName` and its existing test expectations.
   Keep the device-model suffix and current name validation rules.
-- [ ] Change `config.product_name` in `native_playback_engine.cpp` to `Sandpiper`.
+- [x] Change `config.product_name` in `native_playback_engine.cpp` to `Sandpiper`.
   Keep `config.name` as the saved player name and `manufacturer` as `Nanopixel`.
-- [ ] Update the report heading in `AudioDiagnostics.kt` and any related test
+- [x] Update the report heading in `AudioDiagnostics.kt` and any related test
   expectations so exported diagnostics identify Sandpiper.
-- [ ] Set `rootProject.name` in `settings.gradle.kts` to `Sandpiper`.
+- [x] Set `rootProject.name` in `settings.gradle.kts` to `Sandpiper`.
 - [ ] Review remaining old-name matches individually. References to the actual
   Sendspin protocol and internal technical identifiers are expected to remain.
 
@@ -68,11 +78,11 @@ Working description: **A Sendspin player for Android.**
 
 ## 4. Update documentation and release materials
 
-- [ ] Update the README title and product references, retaining the protocol
+- [x] Update the README title and product references, retaining the protocol
   compatibility requirements and the existing encrypted-release migration notes.
-- [ ] Update the current product heading in `TODO.md`. Preserve completed work
+- [x] Update the current product heading in `TODO.md`. Preserve completed work
   and historical technical names where they explain earlier implementation.
-- [ ] Explain that Sandpiper is the renamed Sendspin Satellite and that existing
+- [x] Explain that Sandpiper is the renamed Sendspin Satellite and that existing
   installations should update in place with their settings and pairing intact.
 - [ ] Agree the public repository name and description. If the repository is
   renamed, update affected links, clone instructions, and release references.

@@ -28,6 +28,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.nanopixel.sendspinsatellite.R
 import com.nanopixel.sendspinsatellite.connection.ConnectionState
 import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
 import com.nanopixel.sendspinsatellite.playback.DiscoveredServer
@@ -50,7 +52,7 @@ internal fun ConnectionScreen(
         ConnectionState.HANDSHAKING,
         ConnectionState.SYNCHRONISING -> "Connecting to your Sendspin system…"
         ConnectionState.ERROR -> "We couldn't connect"
-        else -> "Set up Sendspin Satellite"
+        else -> stringResource(R.string.connection_setup_title)
     }
     val message = when (state.connectionState) {
         ConnectionState.DISCOVERING -> "Looking on your local network."

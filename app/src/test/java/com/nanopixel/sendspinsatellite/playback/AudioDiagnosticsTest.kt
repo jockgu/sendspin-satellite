@@ -72,6 +72,7 @@ class AudioDiagnosticsTest {
 
         val report = AudioDiagnosticReportFormatter.format(diagnostics)
 
+        assertTrue(report.startsWith("Sandpiper alpha audio diagnostics"))
         assertTrue(report.contains("Acme Audio"))
         assertTrue(report.contains("changed output"))
         assertFalse(report.contains("Acme\nAudio"))

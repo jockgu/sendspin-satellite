@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Sendspin Satellite"
+rootProject.name = "Sandpiper"
 include(":app")
