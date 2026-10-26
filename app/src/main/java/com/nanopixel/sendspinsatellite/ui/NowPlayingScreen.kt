@@ -601,7 +601,7 @@ internal suspend fun decodeArtwork(encodedJpeg: ByteArray?): Bitmap? = withConte
 @Preview(showBackground = true)
 @Composable
 private fun ConnectingNowPlayingPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         NowPlayingScreen(
             presentation = ConnectionUiState(
                 connectionState = ConnectionState.CONNECTING,
@@ -616,7 +616,7 @@ private fun ConnectingNowPlayingPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun PlayingNowPlayingPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         NowPlayingScreen(
             presentation = ConnectionUiState(
                 savedServer = SavedServer(
@@ -648,7 +648,7 @@ private fun PlayingNowPlayingPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun PartialMetadataNowPlayingPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         NowPlayingScreen(
             presentation = ConnectionUiState(
                 connectionState = ConnectionState.PLAYING,
@@ -667,7 +667,7 @@ private fun PartialMetadataNowPlayingPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun EmptyNowPlayingPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         NowPlayingScreen(
             presentation = ConnectionUiState(
                 connectionState = ConnectionState.READY,
@@ -682,7 +682,7 @@ private fun EmptyNowPlayingPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun PausedNowPlayingPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         NowPlayingScreen(
             presentation = ConnectionUiState(
                 connectionState = ConnectionState.PLAYING,
@@ -706,7 +706,7 @@ private fun PausedNowPlayingPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun UnknownDurationNowPlayingPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         NowPlayingScreen(
             presentation = ConnectionUiState(
                 connectionState = ConnectionState.PLAYING,
@@ -729,7 +729,7 @@ private fun UnknownDurationNowPlayingPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun BufferingNowPlayingPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         NowPlayingScreen(
             presentation = ConnectionUiState(
                 connectionState = ConnectionState.BUFFERING,
@@ -745,7 +745,7 @@ private fun BufferingNowPlayingPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun RecoveringNowPlayingPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         NowPlayingScreen(
             presentation = ConnectionUiState(
                 savedServer = SavedServer(
@@ -764,7 +764,7 @@ private fun RecoveringNowPlayingPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun DisconnectedNowPlayingPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         NowPlayingScreen(
             presentation = ConnectionUiState(
                 savedServer = SavedServer(
@@ -784,7 +784,7 @@ private fun DisconnectedNowPlayingPreview() {
 @Preview(showBackground = true, widthDp = 320, heightDp = 640, fontScale = 1.5f)
 @Composable
 private fun LongMetadataNowPlayingPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         NowPlayingScreen(
             presentation = ConnectionUiState(
                 connectionState = ConnectionState.PLAYING,
@@ -808,7 +808,7 @@ private fun LongMetadataNowPlayingPreview() {
 @Preview(showBackground = true, widthDp = 840, heightDp = 480)
 @Composable
 private fun WideNowPlayingPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         NowPlayingScreen(
             presentation = ConnectionUiState(
                 savedServer = SavedServer(

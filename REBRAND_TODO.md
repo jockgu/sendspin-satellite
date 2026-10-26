@@ -10,7 +10,12 @@ Working description: **A Sendspin player for Android.**
 - Public product and server product name: **Sandpiper**.
 - New default player names keep the device model suffix (`Sandpiper <model>`);
   saved player names remain unchanged.
-- Wordmark, bird mark, and colour palette are still to be settled.
+- Palette: Midnight Violet `#331E36`, Indigo Velvet `#41337A`, Steel Blue
+  `#6EA4BF`, Frozen Water `#C2EFEB`, and Honeydew `#ECFEE8`.
+- Use default Compose backgrounds with palette colours for text and controls.
+- Bird mark: concept B, a flying bird with sound waves. Editable artwork and
+  Android export instructions are in `artwork/`.
+- The wordmark is still to be settled.
 
 ## Preparation
 
@@ -60,14 +65,14 @@ Working description: **A Sendspin player for Android.**
 
 - [ ] Create one recognisable sandpiper mark and a wordmark. Keep a reusable
   source asset in the repository and record how Android assets are exported.
-- [ ] Replace `drawable-nodpi/sendspin_satellite_icon_v1.png` and its references
+- [x] Replace `drawable-nodpi/sendspin_satellite_icon_v1.png` and its references
   in `ic_launcher_foreground.xml`, the fallback launcher XML resources, and the
   splash theme. Use a Sandpiper resource name for the replacement artwork.
-- [ ] Update all density-specific `ic_launcher.webp` and `ic_launcher_round.webp`
+- [x] Update all density-specific `ic_launcher.webp` and `ic_launcher_round.webp`
   files, plus adaptive launcher assets under `mipmap-anydpi-v26`.
-- [ ] Replace the notification mark in `ic_stat_sendspin.xml` with a simple
+- [x] Replace the notification mark in `ic_stat_sendspin.xml` with a simple
   monochrome bird mark and update `PlaybackService.kt` if its resource is renamed.
-- [ ] Align splash background and theme colours with the chosen identity.
+- [x] Align splash background and theme colours with the chosen identity.
   Update both theme resource variants and manifest references if theme names
   change; keep the existing navigation and playback controls familiar.
 - [ ] Check small-size legibility, launcher masks, round icons, splash cropping,

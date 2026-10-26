@@ -179,7 +179,7 @@ internal fun ManualServerDialog(
 @Preview(showBackground = true)
 @Composable
 private fun DisconnectedConnectionPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         ConnectionScreen(
             state = ConnectionUiState(),
             onDiscover = {},
@@ -191,7 +191,7 @@ private fun DisconnectedConnectionPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun DiscoveringConnectionPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         ConnectionScreen(
             state = ConnectionUiState(connectionState = ConnectionState.DISCOVERING),
             onDiscover = {},

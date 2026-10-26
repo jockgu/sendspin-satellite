@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+  <g transform="translate(8.64 8.64) scale(0.84)">
+    <path fill="#41337A" d="M 23,25 C 21,34 28,41 40,46 L 55,53 C 62,57 63,63 60,72 C 66,65 71,57 80,55 C 77,51 72,50 67,52 C 67,42 61,38 49,34 C 38,30 30,28 23,25 Z"/>
+    <path fill="#6EA4BF" d="M 23,38 C 24,47 31,52 42,57 C 50,61 55,65 57,72 C 58,64 55,59 48,55 C 36,49 28,44 23,38 Z"/>
+    <path fill="#41337A" d="M 23,50 C 27,57 38,61 47,64 C 54,66 57,70 55,74 C 51,79 45,82 42,84 C 51,83 58,80 61,75 C 64,68 58,64 50,61 C 38,57 30,53 23,50 Z"/>
+    <path fill="none" stroke="#41337A" stroke-width="2.7" stroke-linecap="round" d="M 79,43 C 85,48 85,60 79,65"/>
+    <path fill="none" stroke="#41337A" stroke-width="2.7" stroke-linecap="round" d="M 83,38 C 92,46 92,62 83,70"/>
+  </g>
+</svg>

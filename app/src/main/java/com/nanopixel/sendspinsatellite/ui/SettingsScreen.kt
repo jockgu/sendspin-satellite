@@ -145,7 +145,7 @@ internal fun ForgetServerDialog(
 @Preview(showBackground = true)
 @Composable
 private fun SettingsPreview() {
-    MaterialTheme {
+    SandpiperTheme {
         SettingsScreen(
             state = ConnectionUiState(
                 savedServer = SavedServer("ws://192.168.1.20:8927/sendspin", "Music Assistant"),
