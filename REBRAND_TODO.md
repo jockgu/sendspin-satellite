@@ -5,6 +5,13 @@ identity and the same focus on reliable playback.
 
 Working description: **A Sendspin player for Android.**
 
+## Decisions recorded
+
+- Public product and server product name: **Sandpiper**.
+- New default player names keep the device model suffix (`Sandpiper <model>`);
+  saved player names remain unchanged.
+- Wordmark, bird mark, and colour palette are still to be settled.
+
 ## Preparation
 
 - [x] Create `codex/sandpiper-rebrand` from the current `alpha` checkout.
@@ -34,18 +41,18 @@ Working description: **A Sendspin player for Android.**
 
 ## 2. Rename the public product
 
-- [ ] Change `app_name` in `app/src/main/res/values/strings.xml` to `Sandpiper`.
+- [x] Change `app_name` in `app/src/main/res/values/strings.xml` to `Sandpiper`.
   Check its use in the launcher, Android app settings, and notification fallback.
-- [ ] Replace product wording in `ConnectionScreen.kt`, `SettingsScreen.kt`, and
+- [x] Replace product wording in `ConnectionScreen.kt`, `SettingsScreen.kt`, and
   `ConnectionViewModel.kt`, including setup and local-network permission text.
   Use string resources for the wording changed in this pass.
-- [ ] Update `PlayerNamePolicy.defaultName` and its existing test expectations.
+- [x] Update `PlayerNamePolicy.defaultName` and its existing test expectations.
   Keep the device-model suffix and current name validation rules.
-- [ ] Change `config.product_name` in `native_playback_engine.cpp` to `Sandpiper`.
+- [x] Change `config.product_name` in `native_playback_engine.cpp` to `Sandpiper`.
   Keep `config.name` as the saved player name and `manufacturer` as `Nanopixel`.
-- [ ] Update the report heading in `AudioDiagnostics.kt` and any related test
+- [x] Update the report heading in `AudioDiagnostics.kt` and any related test
   expectations so exported diagnostics identify Sandpiper.
-- [ ] Set `rootProject.name` in `settings.gradle.kts` to `Sandpiper`.
+- [x] Set `rootProject.name` in `settings.gradle.kts` to `Sandpiper`.
 - [ ] Review remaining old-name matches individually. References to the actual
   Sendspin protocol and internal technical identifiers are expected to remain.
 

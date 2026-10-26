@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.nanopixel.sendspinsatellite.R
 import com.nanopixel.sendspinsatellite.playback.PlaybackService
 import com.nanopixel.sendspinsatellite.playback.PlaybackCommand
 import com.nanopixel.sendspinsatellite.playback.toUiState
@@ -162,7 +163,7 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     fun localNetworkPermissionDenied() {
         _uiState.value = _uiState.value.copy(
             connectionState = ConnectionState.ERROR,
-            detail = "Allow local network access so Sendspin Satellite can find your server.",
+            detail = app.getString(R.string.local_network_permission_denied),
         )
     }
 

@@ -2,7 +2,7 @@ package com.nanopixel.sendspinsatellite.connection
 
 object PlayerNamePolicy {
     const val maxCodePoints = 64
-    const val defaultName = "Sendspin Satellite"
+    const val defaultName = "Sandpiper"
 
     data class Validation(
         val normalized: String?,

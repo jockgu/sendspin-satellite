@@ -28,9 +28,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.nanopixel.sendspinsatellite.R
 import com.nanopixel.sendspinsatellite.connection.ConnectionState
 import com.nanopixel.sendspinsatellite.connection.ConnectionUiState
 import com.nanopixel.sendspinsatellite.connection.SavedServer
@@ -126,7 +128,7 @@ internal fun ForgetServerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Forget this server?") },
-        text = { Text("Sendspin Satellite will search for a server again next time it opens.") },
+        text = { Text(stringResource(R.string.forget_server_message)) },
         confirmButton = {
             TextButton(onClick = onConfirm) {
                 Text("Forget server")
